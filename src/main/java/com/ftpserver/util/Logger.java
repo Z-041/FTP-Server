@@ -17,6 +17,7 @@ public class Logger {
     private final List<LogListener> listeners;
     private String logDirectory;
     private boolean enableFileLogging;
+    private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
 
     public interface LogListener {
         void onLogEntry(LogEntry entry);
@@ -56,7 +57,7 @@ public class Logger {
 
     private Logger() {
         this.logEntries = new CopyOnWriteArrayList<>();
-        this.listeners = new ArrayList<>();
+        this.listeners = new CopyOnWriteArrayList<>();
         this.logDirectory = "logs";
         this.enableFileLogging = true;
     }
@@ -107,9 +108,8 @@ public class Logger {
             String date = entry.timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
             Path logFile = logDir.resolve("ftp-server-" + date + ".log");
             
-            // Create log entry with better formatting
             String formattedEntry = String.format("[%s] [%s] [%s] %s%n",
-                    entry.timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")),
+                    entry.timestamp.format(TIMESTAMP_FORMATTER),
                     entry.level,
                     entry.ip != null ? entry.ip : "-",
                     entry.message);

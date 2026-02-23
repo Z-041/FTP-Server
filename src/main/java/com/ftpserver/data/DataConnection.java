@@ -77,12 +77,15 @@ public abstract class DataConnection implements AutoCloseable {
     public void close() throws IOException {
         if (inputStream != null) {
             inputStream.close();
+            inputStream = null;
         }
         if (outputStream != null) {
             outputStream.close();
+            outputStream = null;
         }
         if (socket != null && !socket.isClosed()) {
             socket.close();
+            socket = null;
         }
     }
 

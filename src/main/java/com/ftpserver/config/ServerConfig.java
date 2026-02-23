@@ -64,17 +64,45 @@ public class ServerConfig {
     }
 
     private void setProperty(String key, String value) {
-        switch (key) {
-            case "port" -> port = Integer.parseInt(value);
-            case "rootDirectory" -> rootDirectory = value;
-            case "maxConnections" -> maxConnections = Integer.parseInt(value);
-            case "connectionTimeout" -> connectionTimeout = Integer.parseInt(value);
-            case "dataPortRangeStart" -> dataPortRangeStart = Integer.parseInt(value);
-            case "dataPortRangeEnd" -> dataPortRangeEnd = Integer.parseInt(value);
-            case "enablePassiveMode" -> enablePassiveMode = Boolean.parseBoolean(value);
-            case "enableActiveMode" -> enableActiveMode = Boolean.parseBoolean(value);
-            case "logDirectory" -> logDirectory = value;
-            case "passiveAddress" -> passiveAddress = value.isEmpty() ? null : value;
+        try {
+            switch (key) {
+                case "port" -> {
+                    int p = Integer.parseInt(value);
+                    if (p > 0 && p <= 65535) {
+                        port = p;
+                    }
+                }
+                case "rootDirectory" -> rootDirectory = value;
+                case "maxConnections" -> {
+                    int m = Integer.parseInt(value);
+                    if (m > 0) {
+                        maxConnections = m;
+                    }
+                }
+                case "connectionTimeout" -> {
+                    int t = Integer.parseInt(value);
+                    if (t >= 0) {
+                        connectionTimeout = t;
+                    }
+                }
+                case "dataPortRangeStart" -> {
+                    int s = Integer.parseInt(value);
+                    if (s > 0 && s <= 65535) {
+                        dataPortRangeStart = s;
+                    }
+                }
+                case "dataPortRangeEnd" -> {
+                    int e = Integer.parseInt(value);
+                    if (e > 0 && e <= 65535) {
+                        dataPortRangeEnd = e;
+                    }
+                }
+                case "enablePassiveMode" -> enablePassiveMode = Boolean.parseBoolean(value);
+                case "enableActiveMode" -> enableActiveMode = Boolean.parseBoolean(value);
+                case "logDirectory" -> logDirectory = value;
+                case "passiveAddress" -> passiveAddress = value.isEmpty() ? null : value;
+            }
+        } catch (NumberFormatException e) {
         }
     }
 

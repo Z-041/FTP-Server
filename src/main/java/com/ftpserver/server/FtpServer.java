@@ -64,7 +64,7 @@ public class FtpServer {
         this.config = config;
         this.userManager = userManager;
         this.clientSessions = new CopyOnWriteArrayList<>();
-        this.listeners = new ArrayList<>();
+        this.listeners = new CopyOnWriteArrayList<>();
         this.logger = Logger.getInstance();
         this.running = false;
     }
@@ -101,9 +101,9 @@ public class FtpServer {
         while (running) {
             try {
                 Socket clientSocket = serverSocket.accept();
+                String clientIp = clientSocket.getInetAddress().getHostAddress();
                 if (clientSessions.size() >= config.getMaxConnections()) {
                     clientSocket.close();
-                    String clientIp = clientSocket.getInetAddress().getHostAddress();
                     logger.warn("Connection rejected: max connections reached", "FtpServer", clientIp);
                     continue;
                 }
@@ -151,13 +151,24 @@ public class FtpServer {
         }
         for (ClientSession session : clientSessions) {
             try {
-                session.socket.close();
+                if (!session.socket.isClosed()) {
+                    session.socket.close();
+                }
             } catch (IOException e) {
+                logger.error("Error closing client socket: " + e.getMessage(), "FtpServer", session.getClientAddress());
             }
         }
         clientSessions.clear();
         if (threadPool != null && !threadPool.isShutdown()) {
             threadPool.shutdownNow();
+            try {
+                if (!threadPool.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                    logger.warn("Thread pool did not terminate within timeout", "FtpServer", "-");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.error("Thread pool termination interrupted: " + e.getMessage(), "FtpServer", "-");
+            }
         }
         logger.info("FTP Server stopped", "FtpServer", "-");
         listeners.forEach(ServerListener::onServerStopped);
