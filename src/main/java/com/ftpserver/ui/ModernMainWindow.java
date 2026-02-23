@@ -436,7 +436,7 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
 
         for (javafx.scene.Node node : form.getChildren()) {
             if (node instanceof Label) {
-                ((Label) node).setStyle("-fx-text-fill: #e2e8f0; -fx-font-size: 14px;");
+                ((Label) node).getStyleClass().add("form-label");
             }
         }
 
@@ -590,8 +590,7 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
         VBox content = new VBox(16);
-        content.setPadding(new Insets(24));
-        content.setStyle("-fx-background-color: #1e293b;");
+        content.getStyleClass().add("dialog-content");
 
         TextField userField = new TextField();
         userField.getStyleClass().add("text-field");
@@ -614,12 +613,11 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
 
         for (javafx.scene.Node node : content.getChildren()) {
             if (node instanceof Label) {
-                ((Label) node).setStyle("-fx-text-fill: #e2e8f0; -fx-font-size: 13px;");
+                ((Label) node).getStyleClass().add("form-label-small");
             }
         }
 
         dialog.getDialogPane().setContent(content);
-        dialog.getDialogPane().setStyle("-fx-background-color: #1e293b;");
 
         dialog.setResultConverter(btn -> {
             if (btn == ButtonType.OK) {
@@ -654,8 +652,7 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
         VBox content = new VBox(16);
-        content.setPadding(new Insets(24));
-        content.setStyle("-fx-background-color: #1e293b;");
+        content.getStyleClass().add("dialog-content");
 
         TextField userField = new TextField(user.getUsername());
         userField.getStyleClass().add("text-field");
@@ -677,12 +674,11 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
 
         for (javafx.scene.Node node : content.getChildren()) {
             if (node instanceof Label) {
-                ((Label) node).setStyle("-fx-text-fill: #e2e8f0; -fx-font-size: 13px;");
+                ((Label) node).getStyleClass().add("form-label-small");
             }
         }
 
         dialog.getDialogPane().setContent(content);
-        dialog.getDialogPane().setStyle("-fx-background-color: #1e293b;");
 
         dialog.setResultConverter(btn -> {
             if (btn == ButtonType.OK) {
@@ -702,6 +698,8 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
         confirm.setTitle("Confirm Delete");
         confirm.setHeaderText("Delete User");
         confirm.setContentText("Are you sure you want to delete user '" + username + "'?");
+        confirm.getDialogPane().getStyleClass().add("alert");
+        confirm.getDialogPane().getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
         confirm.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
                 userManager.removeUser(username);
@@ -716,6 +714,8 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);
+        alert.getDialogPane().getStyleClass().add("alert");
+        alert.getDialogPane().getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
         alert.showAndWait();
     }
 
