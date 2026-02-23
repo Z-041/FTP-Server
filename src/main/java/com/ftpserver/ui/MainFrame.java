@@ -48,6 +48,15 @@ public class MainFrame extends JFrame implements FtpServer.ServerListener, Logge
     private JTextField portField;
     private JTextField rootDirField;
     private JTextField maxConnectionsField;
+    
+    // 概览面板统计卡片引用
+    private JPanel portCard;
+    private JPanel connectionCard;
+    private JPanel maxConnectionsCard;
+    private JPanel usersCard;
+    
+    // 定时更新器
+    private javax.swing.Timer updateTimer;
 
     public MainFrame() {
         setTitle("FTP服务器管理器");
@@ -62,10 +71,12 @@ public class MainFrame extends JFrame implements FtpServer.ServerListener, Logge
         updateConfigFields();
         updateUsersTable();
         setupServer();
+        initializeUpdateTimer(); // 初始化定时更新器
 
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
+                cleanup();
                 if (ftpServer.isRunning()) {
                     ftpServer.stop();
                 }
@@ -144,14 +155,21 @@ public class MainFrame extends JFrame implements FtpServer.ServerListener, Logge
         panel.setBackground(BACKGROUND_COLOR);
         panel.setBorder(new EmptyBorder(0, 0, 0, 0));
 
+        // 创建统计卡片面板
         JPanel statsGrid = new JPanel(new GridLayout(2, 2, 20, 20));
         statsGrid.setBackground(BACKGROUND_COLOR);
         statsGrid.setBorder(new EmptyBorder(0, 0, 0, 0));
 
-        statsGrid.add(createStatCard("服务器端口", "2121", "🔌"));
-        statsGrid.add(createStatCard("当前连接数", "0", "👥"));
-        statsGrid.add(createStatCard("最大连接数", "50", "📊"));
-        statsGrid.add(createStatCard("用户总数", "0", "👤"));
+        // 创建统计卡片并保存引用
+        portCard = createStatCard("服务器端口", String.valueOf(config.getPort()), "🔌");
+        connectionCard = createStatCard("当前连接数", "0", "👥");
+        maxConnectionsCard = createStatCard("最大连接数", String.valueOf(config.getMaxConnections()), "📊");
+        usersCard = createStatCard("用户总数", String.valueOf(userManager.getAllUsers().size()), "👤");
+
+        statsGrid.add(portCard);
+        statsGrid.add(connectionCard);
+        statsGrid.add(maxConnectionsCard);
+        statsGrid.add(usersCard);
 
         JPanel centerPanel = new JPanel(new BorderLayout());
         centerPanel.setBackground(BACKGROUND_COLOR);
@@ -593,6 +611,21 @@ public class MainFrame extends JFrame implements FtpServer.ServerListener, Logge
         ftpServer = new FtpServer(config, userManager);
         ftpServer.addListener(this);
     }
+    
+    private void initializeUpdateTimer() {
+        // 创建定时器，每2秒更新一次概览数据
+        updateTimer = new javax.swing.Timer(2000, e -> {
+            SwingUtilities.invokeLater(this::updateOverviewStats);
+        });
+        updateTimer.start();
+    }
+    
+    private void cleanup() {
+        // 清理定时器
+        if (updateTimer != null && updateTimer.isRunning()) {
+            updateTimer.stop();
+        }
+    }
 
     private void updateConfigFields() {
         portField.setText(String.valueOf(config.getPort()));
@@ -655,22 +688,46 @@ public class MainFrame extends JFrame implements FtpServer.ServerListener, Logge
     }
 
     private void updateOverviewStats() {
-        Component[] components = ((JPanel) ((JPanel) tabbedPane.getComponentAt(0)).getComponent(0)).getComponents();
-        for (Component comp : components) {
-            if (comp instanceof JPanel) {
-                JLabel valueLabel = (JLabel) ((JPanel) comp).getClientProperty("valueLabel");
-                if (valueLabel != null) {
-                    JLabel iconLabel = (JLabel) ((JPanel) ((JPanel) comp).getComponent(0)).getComponent(0);
-                    String icon = iconLabel.getText();
-                    if (icon.equals("🔌")) {
-                        valueLabel.setText(String.valueOf(config.getPort()));
-                    } else if (icon.equals("👥")) {
-                        valueLabel.setText(String.valueOf(ftpServer != null ? ftpServer.getConnectionCount() : 0));
-                    } else if (icon.equals("📊")) {
-                        valueLabel.setText(String.valueOf(config.getMaxConnections()));
-                    } else if (icon.equals("👤")) {
-                        valueLabel.setText(String.valueOf(userManager.getAllUsers().size()));
-                    }
+        // 更新服务器端口
+        updateCardValue(portCard, String.valueOf(config.getPort()));
+        
+        // 更新当前连接数
+        int connectionCount = ftpServer != null ? ftpServer.getConnectionCount() : 0;
+        updateCardValue(connectionCard, String.valueOf(connectionCount));
+        
+        // 更新最大连接数
+        updateCardValue(maxConnectionsCard, String.valueOf(config.getMaxConnections()));
+        
+        // 更新用户总数
+        int userCount = userManager != null ? userManager.getAllUsers().size() : 0;
+        updateCardValue(usersCard, String.valueOf(userCount));
+        
+        // 更新连接状态颜色指示
+        updateConnectionStatusIndicator(connectionCount);
+    }
+    
+    private void updateCardValue(JPanel card, String value) {
+        if (card != null) {
+            JLabel valueLabel = (JLabel) card.getClientProperty("valueLabel");
+            if (valueLabel != null) {
+                valueLabel.setText(value);
+            }
+        }
+    }
+    
+    private void updateConnectionStatusIndicator(int connectionCount) {
+        if (connectionCard != null) {
+            JLabel valueLabel = (JLabel) connectionCard.getClientProperty("valueLabel");
+            if (valueLabel != null) {
+                // 根据连接数设置颜色
+                if (connectionCount == 0) {
+                    valueLabel.setForeground(TEXT_SECONDARY);
+                } else if (connectionCount < config.getMaxConnections() * 0.8) {
+                    valueLabel.setForeground(SUCCESS_COLOR);
+                } else if (connectionCount < config.getMaxConnections()) {
+                    valueLabel.setForeground(WARNING_COLOR);
+                } else {
+                    valueLabel.setForeground(ERROR_COLOR);
                 }
             }
         }
@@ -1048,7 +1105,7 @@ public class MainFrame extends JFrame implements FtpServer.ServerListener, Logge
     public void onClientConnected(FtpServer.ClientSession session) {
         SwingUtilities.invokeLater(() -> {
             updateClientsTable();
-            updateOverviewStats();
+            updateOverviewStats(); // 立即更新连接数
         });
     }
 
@@ -1056,7 +1113,7 @@ public class MainFrame extends JFrame implements FtpServer.ServerListener, Logge
     public void onClientDisconnected(FtpServer.ClientSession session) {
         SwingUtilities.invokeLater(() -> {
             updateClientsTable();
-            updateOverviewStats();
+            updateOverviewStats(); // 立即更新连接数
         });
     }
 

@@ -11,6 +11,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 public class UserManager {
     private List<User> users;
@@ -58,19 +60,26 @@ public class UserManager {
 
     public void saveUsers() {
         try {
-            Path path = Paths.get(usersFilePath);
-            Files.createDirectories(path.getParent());
-            try (Writer writer = Files.newBufferedWriter(path)) {
-                gson.toJson(users, writer);
+            if (usersFilePath != null && !usersFilePath.isEmpty()) {
+                Path path = Paths.get(usersFilePath);
+                if (path.getParent() != null) {
+                    Files.createDirectories(path.getParent());
+                }
+                try (Writer writer = Files.newBufferedWriter(path)) {
+                    gson.toJson(users, writer);
+                }
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Failed to save users: " + e.getMessage());
         }
     }
 
     public Optional<User> authenticate(String username, String password) {
+        String hashedPassword = hashPassword(password);
         return users.stream()
-                .filter(u -> u.getUsername().equals(username) && u.getPassword().equals(password) && u.isEnabled())
+                .filter(u -> u.getUsername().equals(username) && 
+                           (u.getPassword().equals(password) || u.getPassword().equals(hashedPassword)) && 
+                           u.isEnabled())
                 .findFirst();
     }
 
@@ -79,6 +88,10 @@ public class UserManager {
     }
 
     public void addUser(User user) {
+        // Hash the password before storing
+        if (user.getPassword() != null && !user.getPassword().isEmpty() && !user.isAnonymous()) {
+            user.setPassword(hashPassword(user.getPassword()));
+        }
         users.removeIf(u -> u.getUsername().equals(user.getUsername()));
         users.add(user);
         saveUsers();
@@ -99,6 +112,12 @@ public class UserManager {
     }
 
     public void updateUser(User user) {
+        // Hash the password before storing (if it's not already hashed)
+        if (user.getPassword() != null && !user.getPassword().isEmpty() && !user.isAnonymous()) {
+            if (!user.getPassword().startsWith("SHA256:")) {
+                user.setPassword(hashPassword(user.getPassword()));
+            }
+        }
         int index = -1;
         for (int i = 0; i < users.size(); i++) {
             if (users.get(i).getUsername().equals(user.getUsername())) {
@@ -109,6 +128,20 @@ public class UserManager {
         if (index >= 0) {
             users.set(index, user);
             saveUsers();
+        }
+    }
+
+    private String hashPassword(String password) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(password.getBytes("UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return "SHA256:" + sb.toString();
+        } catch (Exception e) {
+            return password; // fallback to plain text if hashing fails
         }
     }
 }

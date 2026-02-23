@@ -17,7 +17,9 @@ public class ServerConfig {
     private String logDirectory = "logs";
     private String passiveAddress = null;
 
-    public ServerConfig() {}
+    public ServerConfig() {
+        ensureRootDirectory();
+    }
 
     public void load(String configPath) throws IOException {
         Path path = Paths.get(configPath);
@@ -34,6 +36,16 @@ public class ServerConfig {
                         setProperty(key, value);
                     }
                 }
+            }
+        }
+        ensureRootDirectory();
+    }
+
+    private void ensureRootDirectory() {
+        if (rootDirectory != null && !rootDirectory.isEmpty()) {
+            File rootDir = new File(rootDirectory);
+            if (!rootDir.exists()) {
+                rootDir.mkdirs();
             }
         }
     }

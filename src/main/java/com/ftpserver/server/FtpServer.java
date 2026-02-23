@@ -83,7 +83,10 @@ public class FtpServer {
         }
         File rootDir = new File(config.getRootDirectory());
         if (!rootDir.exists()) {
-            rootDir.mkdirs();
+            boolean created = rootDir.mkdirs();
+            if (created) {
+                logger.info("Root directory created: " + rootDir.getAbsolutePath(), "FtpServer", "-");
+            }
         }
         threadPool = Executors.newCachedThreadPool();
         serverSocket = new ServerSocket(config.getPort());

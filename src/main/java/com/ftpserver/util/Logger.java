@@ -106,10 +106,18 @@ public class Logger {
             Files.createDirectories(logDir);
             String date = entry.timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
             Path logFile = logDir.resolve("ftp-server-" + date + ".log");
-            Files.write(logFile, (entry.toString() + System.lineSeparator()).getBytes(),
+            
+            // Create log entry with better formatting
+            String formattedEntry = String.format("[%s] [%s] [%s] %s%n",
+                    entry.timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")),
+                    entry.level,
+                    entry.ip != null ? entry.ip : "-",
+                    entry.message);
+            
+            Files.write(logFile, formattedEntry.getBytes("UTF-8"),
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Failed to write log to file: " + e.getMessage());
         }
     }
 
