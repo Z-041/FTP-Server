@@ -1,9 +1,10 @@
 package com.ftpserver;
 
-import com.ftpserver.ui.MainFrame;
+import com.ftpserver.ui.ModernMainWindow;
+import javafx.application.Application;
 
 public class Main {
     public static void main(String[] args) {
-        MainFrame.main(args);
+        Application.launch(ModernMainWindow.class, args);
     }
 }
