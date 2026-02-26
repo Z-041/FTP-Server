@@ -108,4 +108,15 @@ public class CrossPlatformUtil {
         }
         return normalized;
     }
+    
+    public static String normalizePath(String path, String separator) {
+        if (path == null || path.isEmpty()) {
+            return path;
+        }
+        String normalized = path.replace("\\", separator);
+        while (normalized.contains(separator + separator)) {
+            normalized = normalized.replace(separator + separator, separator);
+        }
+        return normalized;
+    }
 }

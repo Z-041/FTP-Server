@@ -21,6 +21,20 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
+import java.awt.AWTException;
+import java.awt.Dimension;
+import java.awt.Graphics2D;
+import java.awt.Image;
+import java.awt.PopupMenu;
+import java.awt.SystemTray;
+import java.awt.TrayIcon;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.image.BufferedImage;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.RenderingHints;
+import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
@@ -53,12 +67,18 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
     private Timeline updateTimeline;
     private TextArea logTextArea;
 
+    private java.awt.SystemTray systemTray;
+    private java.awt.TrayIcon trayIcon;
+    private java.awt.MenuItem startStopTrayItem;
+    private boolean trayInitialized = false;
+
     @Override
     public void start(Stage stage) {
         this.primaryStage = stage;
         loadConfig();
         initUI();
         setupServer();
+        initSystemTray();
         startUpdateTimer();
     }
 
@@ -102,9 +122,14 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
         primaryStage.setTitle("FTP Server Console");
         primaryStage.setScene(scene);
         primaryStage.setOnCloseRequest(e -> {
-            cleanup();
-            if (ftpServer.isRunning()) {
-                ftpServer.stop();
+            if (trayInitialized) {
+                e.consume();
+                hideToTray();
+            } else {
+                cleanup();
+                if (ftpServer.isRunning()) {
+                    ftpServer.stop();
+                }
             }
         });
         primaryStage.show();
@@ -726,30 +751,6 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
     }
 
     @Override
-    public void onServerStarted() {
-        Platform.runLater(() -> {
-            statusIndicator.getStyleClass().remove("offline");
-            statusIndicator.getStyleClass().add("online");
-            statusText.setText("Running on port " + config.getPort());
-            startStopButton.setText("Stop Server");
-            startStopButton.getStyleClass().remove("btn-primary");
-            startStopButton.getStyleClass().add("btn-danger");
-        });
-    }
-
-    @Override
-    public void onServerStopped() {
-        Platform.runLater(() -> {
-            statusIndicator.getStyleClass().remove("online");
-            statusIndicator.getStyleClass().add("offline");
-            statusText.setText("Server Offline");
-            startStopButton.setText("Start Server");
-            startStopButton.getStyleClass().remove("btn-danger");
-            startStopButton.getStyleClass().add("btn-primary");
-        });
-    }
-
-    @Override
     public void onLogEntry(Logger.LogEntry entry) {
         Platform.runLater(() -> {
             if (logTextArea != null) {
@@ -796,6 +797,165 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
             this.homeDir = new SimpleStringProperty(homeDir);
             this.enabled = new SimpleStringProperty(enabled);
             this.permissions = new SimpleStringProperty(permissions);
+        }
+    }
+
+    private void initSystemTray() {
+        if (!java.awt.SystemTray.isSupported()) {
+            logger.info("System tray is not supported on this platform", "UI", "-");
+            return;
+        }
+
+        java.awt.EventQueue.invokeLater(() -> {
+            try {
+                systemTray = java.awt.SystemTray.getSystemTray();
+                java.awt.PopupMenu popup = new java.awt.PopupMenu();
+
+                java.awt.MenuItem showItem = new java.awt.MenuItem("Show Window");
+                showItem.addActionListener(new java.awt.event.ActionListener() {
+                    @Override
+                    public void actionPerformed(java.awt.event.ActionEvent e) {
+                        showFromTray();
+                    }
+                });
+
+                startStopTrayItem = new java.awt.MenuItem("Start Server");
+                startStopTrayItem.addActionListener(new java.awt.event.ActionListener() {
+                    @Override
+                    public void actionPerformed(java.awt.event.ActionEvent e) {
+                        toggleServerFromTray();
+                    }
+                });
+
+                java.awt.MenuItem exitItem = new java.awt.MenuItem("Exit");
+                exitItem.addActionListener(new java.awt.event.ActionListener() {
+                    @Override
+                    public void actionPerformed(java.awt.event.ActionEvent e) {
+                        exitApplication();
+                    }
+                });
+
+                popup.add(showItem);
+                popup.addSeparator();
+                popup.add(startStopTrayItem);
+                popup.addSeparator();
+                popup.add(exitItem);
+
+                java.awt.Image icon = createTrayIcon();
+                trayIcon = new java.awt.TrayIcon(icon, "FTP Server", popup);
+                trayIcon.setImageAutoSize(true);
+                trayIcon.addActionListener(new java.awt.event.ActionListener() {
+                    @Override
+                    public void actionPerformed(java.awt.event.ActionEvent e) {
+                        showFromTray();
+                    }
+                });
+
+                systemTray.add(trayIcon);
+                trayInitialized = true;
+                logger.info("System tray initialized", "UI", "-");
+            } catch (java.awt.AWTException e) {
+                logger.error("Failed to initialize system tray: " + e.getMessage(), "UI", "-");
+            }
+        });
+    }
+
+    private java.awt.Image createTrayIcon() {
+        int size = 16;
+        java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g2d = image.createGraphics();
+        g2d.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        g2d.setColor(new java.awt.Color(76, 175, 80));
+        g2d.fillOval(0, 0, size, size);
+        g2d.setColor(java.awt.Color.WHITE);
+        g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 10));
+        java.awt.FontMetrics fm = g2d.getFontMetrics();
+        String text = "F";
+        int x = (size - fm.stringWidth(text)) / 2;
+        int y = (size - fm.getHeight()) / 2 + fm.getAscent();
+        g2d.drawString(text, x, y);
+        g2d.dispose();
+        return image;
+    }
+
+    private void hideToTray() {
+        Platform.runLater(() -> {
+            primaryStage.hide();
+        });
+        if (trayIcon != null) {
+            java.awt.EventQueue.invokeLater(() -> {
+                trayIcon.displayMessage("FTP Server", "Server is running in background", java.awt.TrayIcon.MessageType.INFO);
+            });
+        }
+    }
+
+    private void showFromTray() {
+        Platform.runLater(() -> {
+            primaryStage.show();
+            primaryStage.toFront();
+        });
+    }
+
+    private void toggleServerFromTray() {
+        Platform.runLater(() -> {
+            try {
+                toggleServer();
+            } catch (Exception e) {
+                    logger.error("Error toggling server from tray: " + e.getMessage(), "UI", "-");
+            }
+        });
+    }
+
+    private void exitApplication() {
+        Platform.runLater(() -> {
+            cleanup();
+            if (ftpServer.isRunning()) {
+                ftpServer.stop();
+            }
+            if (trayInitialized && systemTray != null) {
+                java.awt.EventQueue.invokeLater(() -> {
+                    systemTray.remove(trayIcon);
+                    Platform.exit();
+                    System.exit(0);
+                });
+            } else {
+                Platform.exit();
+                System.exit(0);
+            }
+        });
+    }
+
+    @Override
+    public void onServerStarted() {
+        Platform.runLater(() -> {
+            statusIndicator.getStyleClass().remove("offline");
+            statusIndicator.getStyleClass().add("online");
+            statusText.setText("Running on port " + config.getPort());
+            startStopButton.setText("Stop Server");
+            startStopButton.getStyleClass().remove("btn-primary");
+            startStopButton.getStyleClass().add("btn-danger");
+        });
+        if (trayInitialized && startStopTrayItem != null) {
+            java.awt.EventQueue.invokeLater(() -> {
+                startStopTrayItem.setLabel("Stop Server");
+            });
+        }
+    }
+
+    @Override
+    public void onServerStopped() {
+        Platform.runLater(() -> {
+            statusIndicator.getStyleClass().remove("online");
+            statusIndicator.getStyleClass().add("offline");
+            statusText.setText("Server Offline");
+            startStopButton.setText("Start Server");
+            startStopButton.getStyleClass().remove("btn-danger");
+            startStopButton.getStyleClass().add("btn-primary");
+        });
+        if (trayInitialized && startStopTrayItem != null) {
+            java.awt.EventQueue.invokeLater(() -> {
+                startStopTrayItem.setLabel("Start Server");
+            });
         }
     }
 }

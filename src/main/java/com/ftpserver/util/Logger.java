@@ -4,6 +4,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -18,6 +19,8 @@ public class Logger {
     private String logDirectory;
     private boolean enableFileLogging;
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
+    private static final long MAX_LOG_FILE_SIZE = 10 * 1024 * 1024;
+    private static final int MAX_LOG_FILES = 5;
 
     public interface LogListener {
         void onLogEntry(LogEntry entry);
@@ -108,6 +111,10 @@ public class Logger {
             String date = entry.timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
             Path logFile = logDir.resolve("ftp-server-" + date + ".log");
             
+            if (Files.exists(logFile) && Files.size(logFile) > MAX_LOG_FILE_SIZE) {
+                rotateLogFile(logFile);
+            }
+            
             String formattedEntry = String.format("[%s] [%s] [%s] %s%n",
                     entry.timestamp.format(TIMESTAMP_FORMATTER),
                     entry.level,
@@ -119,6 +126,24 @@ public class Logger {
         } catch (IOException e) {
             System.err.println("Failed to write log to file: " + e.getMessage());
         }
+    }
+
+    private void rotateLogFile(Path logFile) throws IOException {
+        if (!Files.exists(logFile)) {
+            return;
+        }
+        
+        for (int i = MAX_LOG_FILES - 1; i >= 1; i--) {
+            Path currentFile = logFile.resolveSibling(logFile.getFileName() + "." + i);
+            Path nextFile = logFile.resolveSibling(logFile.getFileName() + "." + (i + 1));
+            
+            if (Files.exists(currentFile)) {
+                Files.move(currentFile, nextFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+        
+        Path rotatedFile = logFile.resolveSibling(logFile.getFileName() + ".1");
+        Files.move(logFile, rotatedFile, StandardCopyOption.REPLACE_EXISTING);
     }
 
     public void debug(String message, String source) {

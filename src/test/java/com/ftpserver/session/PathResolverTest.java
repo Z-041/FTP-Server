@@ -26,14 +26,14 @@ class PathResolverTest {
     private void deleteDirectory(Path path) throws Exception {
         if (Files.exists(path)) {
             Files.walk(path)
-                .sorted((a, b) -> b.compareTo(a))
-                .forEach(p -> {
-                    try {
-                        Files.delete(p);
-                    } catch (Exception e) {
-                        // ignore
-                    }
-                });
+                    .sorted((a, b) -> b.compareTo(a))
+                    .forEach(p -> {
+                        try {
+                            Files.delete(p);
+                        } catch (Exception e) {
+                            // ignore
+                        }
+                    });
         }
     }
 
@@ -109,13 +109,13 @@ class PathResolverTest {
         String newRoot = "new_test_root";
         Path newRootPath = Paths.get(newRoot).normalize().toAbsolutePath();
         Files.createDirectories(newRootPath);
-        
+
         pathResolver.setRootDirectory(newRoot);
         assertEquals(newRootPath.toString(), pathResolver.getRootDirectory(), "根目录应该已更新");
-        
+
         String realPath = pathResolver.getRealPath("/test.txt");
         assertTrue(realPath.contains(newRoot), "真实路径应该包含新根目录");
-        
+
         deleteDirectory(newRootPath);
     }
 }

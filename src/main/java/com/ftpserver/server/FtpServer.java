@@ -16,8 +16,10 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class FtpServer {
+    private static final int DEFAULT_CONNECTION_TIMEOUT = 30000;
     private ServerConfig config;
     private UserManager userManager;
     private ServerSocket serverSocket;
@@ -101,10 +103,15 @@ public class FtpServer {
         while (running) {
             try {
                 Socket clientSocket = serverSocket.accept();
+                clientSocket.setSoTimeout(DEFAULT_CONNECTION_TIMEOUT);
                 String clientIp = clientSocket.getInetAddress().getHostAddress();
                 if (clientSessions.size() >= config.getMaxConnections()) {
-                    clientSocket.close();
                     logger.warn("Connection rejected: max connections reached", "FtpServer", clientIp);
+                    try {
+                        clientSocket.close();
+                    } catch (IOException e) {
+                        logger.error("Error closing rejected client socket: " + e.getMessage(), "FtpServer", clientIp);
+                    }
                     continue;
                 }
                 ClientSession session = new ClientSession(clientSocket);
@@ -162,7 +169,7 @@ public class FtpServer {
         if (threadPool != null && !threadPool.isShutdown()) {
             threadPool.shutdownNow();
             try {
-                if (!threadPool.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                if (!threadPool.awaitTermination(5, TimeUnit.SECONDS)) {
                     logger.warn("Thread pool did not terminate within timeout", "FtpServer", "-");
                 }
             } catch (InterruptedException e) {

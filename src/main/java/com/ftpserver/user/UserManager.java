@@ -2,6 +2,7 @@ package com.ftpserver.user;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import org.mindrot.jbcrypt.BCrypt;
 
 import java.io.*;
 import java.lang.reflect.Type;
@@ -11,10 +12,13 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.util.regex.Pattern;
 
 public class UserManager {
+    private static final int BCRYPT_ROUNDS = 12;
+    private static final int MIN_PASSWORD_LENGTH = 8;
+    private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).*$");
+    
     private List<User> users;
     private String usersFilePath;
     private final Gson gson;
@@ -85,11 +89,17 @@ public class UserManager {
         return users.stream().filter(u -> u.getUsername().equals(username)).findFirst();
     }
 
+    public boolean validatePassword(String password) {
+        if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
+            return false;
+        }
+        return PASSWORD_PATTERN.matcher(password).matches();
+    }
+
     public void addUser(User user) {
-        // Hash the password before storing
         if (user.getPassword() != null && !user.getPassword().isEmpty() && !user.isAnonymous()) {
             if (!isPasswordHashed(user.getPassword())) {
-                user.setPassword(hashPasswordWithSalt(user.getPassword()));
+                user.setPassword(hashPassword(user.getPassword()));
             }
         }
         users.removeIf(u -> u.getUsername().equals(user.getUsername()));
@@ -112,10 +122,9 @@ public class UserManager {
     }
 
     public void updateUser(User user) {
-        // Hash the password before storing (if it's not already hashed)
         if (user.getPassword() != null && !user.getPassword().isEmpty() && !user.isAnonymous()) {
             if (!isPasswordHashed(user.getPassword())) {
-                user.setPassword(hashPasswordWithSalt(user.getPassword()));
+                user.setPassword(hashPassword(user.getPassword()));
             }
         }
         int index = -1;
@@ -132,7 +141,7 @@ public class UserManager {
     }
 
     private boolean isPasswordHashed(String password) {
-        return password != null && (password.startsWith("SHA256:") || password.startsWith("SHA256SALT:"));
+        return password != null && password.startsWith("$2a$");
     }
 
     private boolean verifyPassword(String plainPassword, String storedPassword) {
@@ -143,55 +152,46 @@ public class UserManager {
             return false;
         }
         if (!isPasswordHashed(storedPassword)) {
+            if (storedPassword.startsWith("SHA256:") || storedPassword.startsWith("SHA256SALT:")) {
+                return verifyLegacyPassword(plainPassword, storedPassword);
+            }
             return plainPassword.equals(storedPassword);
         }
+        return BCrypt.checkpw(plainPassword, storedPassword);
+    }
+
+    private boolean verifyLegacyPassword(String plainPassword, String storedPassword) {
         if (storedPassword.startsWith("SHA256SALT:")) {
-            return verifyPasswordWithSalt(plainPassword, storedPassword);
-        }
-        String hashedOld = hashPasswordWithoutSalt(plainPassword);
-        return storedPassword.equals(hashedOld);
-    }
-
-    private String hashPasswordWithSalt(String password) {
-        try {
-            byte[] salt = new byte[16];
-            java.security.SecureRandom.getInstanceStrong().nextBytes(salt);
-            String saltHex = bytesToHex(salt);
-            String saltedPassword = saltHex + password;
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] hash = md.digest(saltedPassword.getBytes("UTF-8"));
-            return "SHA256SALT:" + saltHex + ":" + bytesToHex(hash);
-        } catch (Exception e) {
-            return password;
-        }
-    }
-
-    private boolean verifyPasswordWithSalt(String plainPassword, String storedPassword) {
-        try {
-            String[] parts = storedPassword.split(":");
-            if (parts.length != 3) {
+            try {
+                String[] parts = storedPassword.split(":");
+                if (parts.length != 3) {
+                    return false;
+                }
+                String saltHex = parts[1];
+                String storedHashHex = parts[2];
+                String saltedPassword = saltHex + plainPassword;
+                java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+                byte[] hash = md.digest(saltedPassword.getBytes("UTF-8"));
+                String computedHashHex = bytesToHex(hash);
+                return storedHashHex.equals(computedHashHex);
+            } catch (Exception e) {
                 return false;
             }
-            String saltHex = parts[1];
-            String storedHashHex = parts[2];
-            String saltedPassword = saltHex + plainPassword;
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] hash = md.digest(saltedPassword.getBytes("UTF-8"));
-            String computedHashHex = bytesToHex(hash);
-            return storedHashHex.equals(computedHashHex);
-        } catch (Exception e) {
-            return false;
+        } else if (storedPassword.startsWith("SHA256:")) {
+            try {
+                java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+                byte[] hash = md.digest(plainPassword.getBytes("UTF-8"));
+                String computedHash = "SHA256:" + bytesToHex(hash);
+                return storedPassword.equals(computedHash);
+            } catch (Exception e) {
+                return false;
+            }
         }
+        return false;
     }
 
-    private String hashPasswordWithoutSalt(String password) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] hash = md.digest(password.getBytes("UTF-8"));
-            return "SHA256:" + bytesToHex(hash);
-        } catch (Exception e) {
-            return password;
-        }
+    private String hashPassword(String password) {
+        return BCrypt.hashpw(password, BCrypt.gensalt(BCRYPT_ROUNDS));
     }
 
     private String bytesToHex(byte[] bytes) {

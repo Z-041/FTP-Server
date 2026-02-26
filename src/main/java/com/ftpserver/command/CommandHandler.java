@@ -20,7 +20,8 @@ public class CommandHandler {
             String line;
             while ((line = session.readLine()) != null) {
                 line = line.trim();
-                if (line.isEmpty()) continue;
+                if (line.isEmpty())
+                    continue;
                 session.logDebug("Received: " + line);
                 int spaceIndex = line.indexOf(' ');
                 String command = (spaceIndex > 0 ? line.substring(0, spaceIndex) : line).toUpperCase();
