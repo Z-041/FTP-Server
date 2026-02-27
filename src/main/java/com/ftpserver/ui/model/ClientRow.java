@@ -1,17 +1,19 @@
 package com.ftpserver.ui.model;
 
-import javafx.beans.property.SimpleStringProperty;
-
 public class ClientRow {
-    public final SimpleStringProperty ip;
-    public final SimpleStringProperty port;
-    public final SimpleStringProperty connectTime;
-    public final SimpleStringProperty status;
+    public final String ip;
+    public final String port;
+    public final String connectTime;
+    public final String status;
 
     public ClientRow(String ip, String port, String connectTime, String status) {
-        this.ip = new SimpleStringProperty(ip);
-        this.port = new SimpleStringProperty(port);
-        this.connectTime = new SimpleStringProperty(connectTime);
-        this.status = new SimpleStringProperty(status);
+        this.ip = ip;
+        this.port = port;
+        this.connectTime = connectTime;
+        this.status = status;
+    }
+
+    public String get() {
+        return ip;
     }
 }

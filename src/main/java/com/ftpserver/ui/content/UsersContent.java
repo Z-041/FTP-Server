@@ -1,106 +1,137 @@
 package com.ftpserver.ui.content;
 
 import com.ftpserver.ui.model.UserRow;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
-import javafx.geometry.Pos;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.VBox;
 
-public class UsersContent extends VBox {
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.util.Vector;
 
-    private ObservableList<UserRow> usersData;
-    private TableView<UserRow> table;
-    private Button addBtn;
-    private Button editBtn;
-    private Button deleteBtn;
+public class UsersContent extends JPanel {
+
+    private DefaultTableModel tableModel;
+    private JTable table;
+    private JButton addBtn;
+    private JButton editBtn;
+    private JButton deleteBtn;
 
     public UsersContent() {
         initialize();
     }
 
     private void initialize() {
-        setSpacing(16);
-        setFillWidth(true);
+        setBackground(new Color(248, 250, 252));
+        setLayout(new BorderLayout(0, 12));
 
-        HBox headerBar = createHeaderBar();
+        JPanel headerBar = createHeaderBar();
         table = createUsersTable();
 
-        getChildren().addAll(headerBar, table);
-        VBox.setVgrow(table, javafx.scene.layout.Priority.ALWAYS);
+        add(headerBar, BorderLayout.NORTH);
+        add(new JScrollPane(table), BorderLayout.CENTER);
     }
 
-    private HBox createHeaderBar() {
-        HBox headerBar = new HBox();
-        headerBar.setAlignment(Pos.CENTER_LEFT);
+    private JPanel createHeaderBar() {
+        JPanel headerBar = new JPanel(new BorderLayout());
+        headerBar.setBackground(new Color(248, 250, 252));
 
-        Label title = new Label("User Management");
-        title.getStyleClass().add("card-title");
+        JLabel title = new JLabel("用户管理");
+        title.setForeground(new Color(15, 23, 42));
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        buttonPanel.setBackground(new Color(248, 250, 252));
 
-        addBtn = new Button("Add User");
-        addBtn.getStyleClass().add("btn-primary");
+        addBtn = createButton("添加用户", new Color(37, 99, 235), Color.WHITE);
+        editBtn = createButton("编辑", new Color(241, 245, 249), new Color(71, 85, 105));
+        deleteBtn = createButton("删除", new Color(254, 226, 226), new Color(220, 38, 38));
 
-        editBtn = new Button("Edit User");
-        editBtn.getStyleClass().add("btn-secondary");
+        buttonPanel.add(addBtn);
+        buttonPanel.add(editBtn);
+        buttonPanel.add(deleteBtn);
 
-        deleteBtn = new Button("Delete User");
-        deleteBtn.getStyleClass().add("btn-danger");
-
-        headerBar.getChildren().addAll(title, spacer, addBtn, editBtn, deleteBtn);
-        HBox.setMargin(addBtn, new javafx.geometry.Insets(0, 12, 0, 0));
-        HBox.setMargin(editBtn, new javafx.geometry.Insets(0, 12, 0, 0));
+        headerBar.add(title, BorderLayout.WEST);
+        headerBar.add(buttonPanel, BorderLayout.EAST);
 
         return headerBar;
     }
 
-    private TableView<UserRow> createUsersTable() {
-        usersData = FXCollections.<UserRow>observableArrayList();
-        TableView<UserRow> table = new TableView<>(usersData);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.getStyleClass().add("table-view");
+    private JButton createButton(String text, Color bg, Color fg) {
+        JButton btn = new JButton(text);
+        btn.setBackground(bg);
+        btn.setForeground(fg);
+        btn.setFocusPainted(false);
+        btn.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(bg.darker()),
+            new EmptyBorder(7, 14, 7, 14)
+        ));
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
 
-        TableColumn<UserRow, String> userCol = new TableColumn<>("Username");
-        userCol.setCellValueFactory(cellData -> cellData.getValue().username);
+    private JTable createUsersTable() {
+        String[] columnNames = {"用户名", "主目录", "启用状态", "权限"};
+        tableModel = new DefaultTableModel(columnNames, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
 
-        TableColumn<UserRow, String> homeCol = new TableColumn<>("Home Directory");
-        homeCol.setCellValueFactory(cellData -> cellData.getValue().homeDir);
-
-        TableColumn<UserRow, String> enabledCol = new TableColumn<>("Enabled");
-        enabledCol.setCellValueFactory(cellData -> cellData.getValue().enabled);
-
-        TableColumn<UserRow, String> permsCol = new TableColumn<>("Permissions");
-        permsCol.setCellValueFactory(cellData -> cellData.getValue().permissions);
-
-        table.getColumns().addAll(userCol, homeCol, enabledCol, permsCol);
+        JTable table = new JTable(tableModel);
+        table.setRowHeight(36);
+        table.setGridColor(new Color(226, 232, 240));
+        table.setSelectionBackground(new Color(239, 246, 255));
+        table.setSelectionForeground(new Color(37, 99, 235));
+        table.getTableHeader().setBackground(new Color(248, 250, 252));
+        table.getTableHeader().setForeground(new Color(71, 85, 105));
+        table.getTableHeader().setPreferredSize(new Dimension(0, 38));
 
         return table;
     }
 
-    public ObservableList<UserRow> getUsersData() {
-        return usersData;
+    public void clearData() {
+        tableModel.setRowCount(0);
     }
 
-    public TableView<UserRow> getTable() {
+    public void addUser(UserRow user) {
+        Vector<String> row = new Vector<>();
+        row.add(user.username);
+        row.add(user.homeDir);
+        row.add(user.enabled);
+        row.add(user.permissions);
+        tableModel.addRow(row);
+    }
+
+    public UserRow getSelectedUser() {
+        int row = table.getSelectedRow();
+        if (row >= 0) {
+            return new UserRow(
+                (String) tableModel.getValueAt(row, 0),
+                (String) tableModel.getValueAt(row, 1),
+                (String) tableModel.getValueAt(row, 2),
+                (String) tableModel.getValueAt(row, 3)
+            );
+        }
+        return null;
+    }
+
+    public DefaultTableModel getTableModel() {
+        return tableModel;
+    }
+
+    public JTable getTable() {
         return table;
     }
 
-    public Button getAddBtn() {
+    public JButton getAddBtn() {
         return addBtn;
     }
 
-    public Button getEditBtn() {
+    public JButton getEditBtn() {
         return editBtn;
     }
 
-    public Button getDeleteBtn() {
+    public JButton getDeleteBtn() {
         return deleteBtn;
     }
 }

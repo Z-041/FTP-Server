@@ -1,57 +1,70 @@
 package com.ftpserver.ui.content;
 
 import com.ftpserver.ui.model.ClientRow;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
-import javafx.scene.control.Label;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
-import javafx.scene.layout.VBox;
 
-public class ClientsContent extends VBox {
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.util.Vector;
 
-    private ObservableList<ClientRow> clientsData;
-    private TableView<ClientRow> table;
+public class ClientsContent extends JPanel {
+
+    private DefaultTableModel tableModel;
+    private JTable table;
 
     public ClientsContent() {
         initialize();
     }
 
     private void initialize() {
-        setSpacing(16);
-        setFillWidth(true);
+        setBackground(new Color(248, 250, 252));
+        setLayout(new BorderLayout(0, 12));
 
-        Label title = new Label("Connected Clients");
-        title.getStyleClass().add("card-title");
+        JLabel title = new JLabel("已连接客户端");
+        title.setForeground(new Color(15, 23, 42));
 
-        clientsData = FXCollections.<ClientRow>observableArrayList();
-        table = new TableView<>(clientsData);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.getStyleClass().add("table-view");
+        // 创建表格
+        String[] columnNames = {"IP地址", "端口", "连接时间", "状态"};
+        tableModel = new DefaultTableModel(columnNames, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        table = new JTable(tableModel);
+        table.setRowHeight(36);
+        table.setGridColor(new Color(226, 232, 240));
+        table.setSelectionBackground(new Color(239, 246, 255));
+        table.setSelectionForeground(new Color(37, 99, 235));
+        table.getTableHeader().setBackground(new Color(248, 250, 252));
+        table.getTableHeader().setForeground(new Color(71, 85, 105));
+        table.getTableHeader().setPreferredSize(new Dimension(0, 38));
 
-        TableColumn<ClientRow, String> ipCol = new TableColumn<>("IP Address");
-        ipCol.setCellValueFactory(cellData -> cellData.getValue().ip);
+        JScrollPane scrollPane = new JScrollPane(table);
+        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(226, 232, 240)));
 
-        TableColumn<ClientRow, String> portCol = new TableColumn<>("Port");
-        portCol.setCellValueFactory(cellData -> cellData.getValue().port);
-
-        TableColumn<ClientRow, String> timeCol = new TableColumn<>("Connected Since");
-        timeCol.setCellValueFactory(cellData -> cellData.getValue().connectTime);
-
-        TableColumn<ClientRow, String> statusCol = new TableColumn<>("Status");
-        statusCol.setCellValueFactory(cellData -> cellData.getValue().status);
-
-        table.getColumns().addAll(ipCol, portCol, timeCol, statusCol);
-
-        getChildren().addAll(title, table);
-        VBox.setVgrow(table, javafx.scene.layout.Priority.ALWAYS);
+        add(title, BorderLayout.NORTH);
+        add(scrollPane, BorderLayout.CENTER);
     }
 
-    public ObservableList<ClientRow> getClientsData() {
-        return clientsData;
+    public void clearData() {
+        tableModel.setRowCount(0);
     }
 
-    public TableView<ClientRow> getTable() {
+    public void addClient(ClientRow client) {
+        Vector<String> row = new Vector<>();
+        row.add(client.ip);
+        row.add(client.port);
+        row.add(client.connectTime);
+        row.add(client.status);
+        tableModel.addRow(row);
+    }
+
+    public DefaultTableModel getTableModel() {
+        return tableModel;
+    }
+
+    public JTable getTable() {
         return table;
     }
 }

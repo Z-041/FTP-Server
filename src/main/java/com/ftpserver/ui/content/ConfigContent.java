@@ -1,113 +1,162 @@
 package com.ftpserver.ui.content;
 
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.TextField;
-import javafx.scene.layout.*;
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
 
-public class ConfigContent extends VBox {
+public class ConfigContent extends JPanel {
 
-    private TextField portField;
-    private TextField rootDirField;
-    private Button browseBtn;
-    private TextField maxConnField;
-    private Button saveBtn;
+    private JTextField portField;
+    private JTextField rootDirField;
+    private JButton browseBtn;
+    private JTextField maxConnField;
+    private JButton saveBtn;
 
     public ConfigContent() {
         initialize();
     }
 
     private void initialize() {
-        setSpacing(16);
-        setFillWidth(true);
+        setBackground(new Color(248, 250, 252));
+        setLayout(new BorderLayout());
 
-        VBox card = new VBox(20);
-        card.getStyleClass().add("card");
-        card.setPadding(new Insets(24));
+        JPanel card = new JPanel(new BorderLayout(0, 16));
+        card.setBackground(Color.WHITE);
+        card.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(226, 232, 240)),
+            new EmptyBorder(20, 20, 20, 20)
+        ));
 
-        Label cardTitle = new Label("Server Configuration");
-        cardTitle.getStyleClass().add("card-title");
+        JLabel cardTitle = new JLabel("服务器配置");
+        cardTitle.setForeground(new Color(15, 23, 42));
 
-        GridPane form = createForm();
-        HBox buttonBar = createButtonBar();
+        JPanel form = createForm();
+        JPanel buttonBar = createButtonBar();
 
-        card.getChildren().addAll(cardTitle, form, buttonBar);
-        getChildren().add(card);
+        JPanel centerPanel = new JPanel(new BorderLayout(0, 16));
+        centerPanel.setBackground(Color.WHITE);
+        centerPanel.add(form, BorderLayout.CENTER);
+        centerPanel.add(buttonBar, BorderLayout.SOUTH);
+
+        card.add(cardTitle, BorderLayout.NORTH);
+        card.add(centerPanel, BorderLayout.CENTER);
+
+        add(card, BorderLayout.NORTH);
     }
 
-    private GridPane createForm() {
-        GridPane form = new GridPane();
-        form.setHgap(16);
-        form.setVgap(20);
+    private JPanel createForm() {
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBackground(Color.WHITE);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(6, 0, 6, 14);
+        gbc.anchor = GridBagConstraints.WEST;
 
-        portField = new TextField();
-        portField.getStyleClass().add("text-field");
+        // Port
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        JLabel portLabel = new JLabel("端口:");
+        portLabel.setForeground(new Color(71, 85, 105));
+        form.add(portLabel, gbc);
 
-        rootDirField = new TextField();
-        rootDirField.getStyleClass().add("text-field");
+        gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        portField = new JTextField(20);
+        portField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(203, 213, 225)),
+            new EmptyBorder(8, 10, 8, 10)
+        ));
+        form.add(portField, gbc);
 
-        browseBtn = new Button("Browse");
-        browseBtn.getStyleClass().add("btn-secondary");
+        // Root Directory
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
+        JLabel rootDirLabel = new JLabel("根目录:");
+        rootDirLabel.setForeground(new Color(71, 85, 105));
+        form.add(rootDirLabel, gbc);
 
-        HBox rootDirBox = new HBox(12);
-        rootDirBox.getChildren().addAll(rootDirField, browseBtn);
-        HBox.setHgrow(rootDirField, Priority.ALWAYS);
+        gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        JPanel rootDirPanel = new JPanel(new BorderLayout(8, 0));
+        rootDirPanel.setBackground(Color.WHITE);
+        rootDirField = new JTextField(20);
+        rootDirField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(203, 213, 225)),
+            new EmptyBorder(8, 10, 8, 10)
+        ));
+        browseBtn = new JButton("浏览");
+        browseBtn.setBackground(new Color(241, 245, 249));
+        browseBtn.setForeground(new Color(71, 85, 105));
+        browseBtn.setFocusPainted(false);
+        browseBtn.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(203, 213, 225)),
+            new EmptyBorder(7, 12, 7, 12)
+        ));
+        browseBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        rootDirPanel.add(rootDirField, BorderLayout.CENTER);
+        rootDirPanel.add(browseBtn, BorderLayout.EAST);
+        form.add(rootDirPanel, gbc);
 
-        maxConnField = new TextField();
-        maxConnField.getStyleClass().add("text-field");
+        // Max Connections
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
+        JLabel maxConnLabel = new JLabel("最大连接数:");
+        maxConnLabel.setForeground(new Color(71, 85, 105));
+        form.add(maxConnLabel, gbc);
 
-        form.add(new Label("Port:"), 0, 0);
-        form.add(portField, 1, 0);
-        form.add(new Label("Root Directory:"), 0, 1);
-        form.add(rootDirBox, 1, 1);
-        form.add(new Label("Max Connections:"), 0, 2);
-        form.add(maxConnField, 1, 2);
-
-        ColumnConstraints labelCol = new ColumnConstraints();
-        labelCol.setMinWidth(120);
-        ColumnConstraints fieldCol = new ColumnConstraints();
-        fieldCol.setHgrow(Priority.ALWAYS);
-        form.getColumnConstraints().addAll(labelCol, fieldCol);
-
-        for (javafx.scene.Node node : form.getChildren()) {
-            if (node instanceof Label) {
-                ((Label) node).getStyleClass().add("form-label");
-            }
-        }
+        gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        maxConnField = new JTextField(20);
+        maxConnField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(203, 213, 225)),
+            new EmptyBorder(8, 10, 8, 10)
+        ));
+        form.add(maxConnField, gbc);
 
         return form;
     }
 
-    private HBox createButtonBar() {
-        HBox buttonBar = new HBox();
-        buttonBar.setAlignment(Pos.CENTER_RIGHT);
+    private JPanel createButtonBar() {
+        JPanel buttonBar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttonBar.setBackground(Color.WHITE);
 
-        saveBtn = new Button("Save Configuration");
-        saveBtn.getStyleClass().add("btn-primary");
+        saveBtn = new JButton("保存配置");
+        saveBtn.setBackground(new Color(37, 99, 235));
+        saveBtn.setForeground(Color.WHITE);
+        saveBtn.setFocusPainted(false);
+        saveBtn.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createEmptyBorder(),
+            new EmptyBorder(9, 18, 9, 18)
+        ));
+        saveBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
-        buttonBar.getChildren().add(saveBtn);
+        buttonBar.add(saveBtn);
         return buttonBar;
     }
 
-    public TextField getPortField() {
+    public JTextField getPortField() {
         return portField;
     }
 
-    public TextField getRootDirField() {
+    public JTextField getRootDirField() {
         return rootDirField;
     }
 
-    public Button getBrowseBtn() {
+    public JButton getBrowseBtn() {
         return browseBtn;
     }
 
-    public TextField getMaxConnField() {
+    public JTextField getMaxConnField() {
         return maxConnField;
     }
 
-    public Button getSaveBtn() {
+    public JButton getSaveBtn() {
         return saveBtn;
     }
 }
