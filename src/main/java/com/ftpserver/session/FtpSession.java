@@ -29,6 +29,7 @@ public class FtpSession implements AutoCloseable {
     private final Logger logger;
     private final String clientIp;
     private final PathResolver pathResolver;
+    private long lastActivityTime;
 
     private User currentUser;
     private String currentDirectory;
@@ -55,6 +56,7 @@ public class FtpSession implements AutoCloseable {
         this.authenticated = false;
         this.asciiMode = true;
         this.renameFromPending = false;
+        this.lastActivityTime = System.currentTimeMillis();
     }
 
     public void sendResponse(String response) {
@@ -125,19 +127,27 @@ public class FtpSession implements AutoCloseable {
         return sdf.format(new Date(timestamp));
     }
 
-    public PassiveDataConnection createPassiveDataConnection() throws IOException {
-        IOException lastException = null;
+    public PassiveDataConnection createPassiveDataConnection() throws IOException, com.ftpserver.data.DataConnectionException {
+        Exception lastException = null;
         for (int port = config.getDataPortRangeStart(); port <= config.getDataPortRangeEnd(); port++) {
             try {
                 return new PassiveDataConnection(InetAddress.getByName("0.0.0.0"), port);
             } catch (IOException e) {
                 lastException = e;
+            } catch (com.ftpserver.data.DataConnectionException e) {
+                lastException = e;
             }
         }
-        throw lastException != null ? lastException : new IOException("No available port in range");
+        if (lastException instanceof IOException) {
+            throw (IOException) lastException;
+        } else if (lastException instanceof com.ftpserver.data.DataConnectionException) {
+            throw (com.ftpserver.data.DataConnectionException) lastException;
+        } else {
+            throw new IOException("No available port in range");
+        }
     }
 
-    public DataConnection openDataConnection() throws IOException {
+    public DataConnection openDataConnection() throws IOException, com.ftpserver.data.DataConnectionException {
         if (passiveDataConnection != null) {
             passiveDataConnection.connect();
             DataConnection dc = passiveDataConnection;
@@ -257,7 +267,11 @@ public class FtpSession implements AutoCloseable {
     public void close() {
         try {
             if (passiveDataConnection != null) {
-                passiveDataConnection.close();
+                try {
+                    passiveDataConnection.close();
+                } catch (com.ftpserver.data.DataConnectionException e) {
+                    logger.error("Data connection close error: " + e.getMessage(), "FtpSession", clientIp);
+                }
             }
             if (reader != null) {
                 reader.close();
@@ -271,5 +285,36 @@ public class FtpSession implements AutoCloseable {
         } catch (IOException e) {
             logger.error("Close error: " + e.getMessage(), "FtpSession", clientIp);
         }
+    }
+
+    /**
+     * 检查会话是否连接
+     * @return 是否已连接
+     */
+    public boolean isConnected() {
+        return controlSocket != null && !controlSocket.isClosed();
+    }
+
+    /**
+     * 更新最后活动时间
+     */
+    public void updateLastActivityTime() {
+        this.lastActivityTime = System.currentTimeMillis();
+    }
+
+    /**
+     * 获取最后活动时间
+     * @return 最后活动时间戳
+     */
+    public long getLastActivityTime() {
+        return lastActivityTime;
+    }
+
+    /**
+     * 获取远程地址
+     * @return 远程地址
+     */
+    public InetAddress getRemoteAddress() {
+        return controlSocket.getInetAddress();
     }
 }

@@ -18,6 +18,13 @@ public class RnfrCommand implements FtpCommand {
             return;
         }
         String path = session.resolvePath(argument);
+        
+        // 检查路径安全性
+        if (!session.getPathResolver().isPathSafe(path)) {
+            session.sendResponse("550 Path not allowed");
+            return;
+        }
+        
         File file = new File(session.getRealPath(path));
         if (!file.exists()) {
             session.sendResponse("550 File not found");

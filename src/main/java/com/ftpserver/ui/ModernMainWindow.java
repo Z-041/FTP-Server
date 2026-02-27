@@ -84,13 +84,13 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
 
     private void loadConfig() {
         config = new ServerConfig();
+        logger = Logger.getInstance();
         try {
             config.load(CONFIG_PATH);
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Failed to load config: " + e.getMessage(), "UI", "-");
         }
         userManager = new UserManager(USERS_PATH);
-        logger = Logger.getInstance();
         logger.setLogDirectory(config.getLogDirectory());
         logger.addListener(this);
     }

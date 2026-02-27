@@ -24,6 +24,15 @@ public class RntoCommand implements FtpCommand {
             return;
         }
         String destPath = session.resolvePath(argument);
+        
+        // 检查路径安全性
+        if (!session.getPathResolver().isPathSafe(destPath)) {
+            session.sendResponse("550 Path not allowed");
+            session.setRenameFromPending(false);
+            session.setRenameFromPath(null);
+            return;
+        }
+        
         File from = new File(session.getRealPath(session.getRenameFromPath()));
         File to = new File(session.getRealPath(destPath));
         if (!from.exists()) {

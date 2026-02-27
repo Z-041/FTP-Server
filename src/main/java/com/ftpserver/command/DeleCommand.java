@@ -14,6 +14,13 @@ public class DeleCommand implements FtpCommand {
             return;
         }
         String fullPath = session.resolvePath(argument);
+        
+        // 检查路径安全性
+        if (!session.getPathResolver().isPathSafe(fullPath)) {
+            session.sendResponse("550 Path not allowed");
+            return;
+        }
+        
         File file = new File(session.getRealPath(fullPath));
         if (file.exists() && file.isFile() && file.delete()) {
             session.sendResponse("250 File deleted");

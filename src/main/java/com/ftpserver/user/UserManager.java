@@ -3,6 +3,7 @@ package com.ftpserver.user;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import org.mindrot.jbcrypt.BCrypt;
+import com.ftpserver.util.Logger;
 
 import java.io.*;
 import java.lang.reflect.Type;
@@ -22,14 +23,19 @@ public class UserManager {
     private List<User> users;
     private String usersFilePath;
     private final Gson gson;
+    private final Logger logger;
 
     public UserManager(String usersFilePath) {
         this.usersFilePath = usersFilePath;
         this.gson = new Gson();
+        this.logger = Logger.getInstance();
         this.users = new ArrayList<>();
         loadUsers();
     }
 
+    /**
+     * 加载用户列表从文件中
+     */
     public void loadUsers() {
         Path path = Paths.get(usersFilePath);
         if (Files.exists(path)) {
@@ -40,7 +46,7 @@ public class UserManager {
                     this.users = loadedUsers;
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.error("Failed to load users: " + e.getMessage(), "UserManager", "-");  
             }
         }
         ensureAnonymousUser();
@@ -73,7 +79,7 @@ public class UserManager {
                 }
             }
         } catch (IOException e) {
-            System.err.println("Failed to save users: " + e.getMessage());
+            logger.error("Failed to save users: " + e.getMessage(), "UserManager", "-");
         }
     }
 
@@ -97,9 +103,11 @@ public class UserManager {
     }
 
     public void addUser(User user) {
-        if (user.getPassword() != null && !user.getPassword().isEmpty() && !user.isAnonymous()) {
-            if (!isPasswordHashed(user.getPassword())) {
-                user.setPassword(hashPassword(user.getPassword()));
+        if (!user.isAnonymous()) {
+            if (user.getPassword() != null && !user.getPassword().isEmpty()) {
+                if (!isPasswordHashed(user.getPassword())) {
+                    user.setPassword(hashPassword(user.getPassword()));
+                }
             }
         }
         users.removeIf(u -> u.getUsername().equals(user.getUsername()));
@@ -122,9 +130,11 @@ public class UserManager {
     }
 
     public void updateUser(User user) {
-        if (user.getPassword() != null && !user.getPassword().isEmpty() && !user.isAnonymous()) {
-            if (!isPasswordHashed(user.getPassword())) {
-                user.setPassword(hashPassword(user.getPassword()));
+        if (!user.isAnonymous()) {
+            if (user.getPassword() != null && !user.getPassword().isEmpty()) {
+                if (!isPasswordHashed(user.getPassword())) {
+                    user.setPassword(hashPassword(user.getPassword()));
+                }
             }
         }
         int index = -1;

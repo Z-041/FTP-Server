@@ -18,16 +18,19 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * FTP服务器类，负责处理客户端连接和管理FTP会话
+ */
 public class FtpServer {
-    private static final int DEFAULT_CONNECTION_TIMEOUT = 30000;
-    private ServerConfig config;
-    private UserManager userManager;
-    private ServerSocket serverSocket;
-    private ExecutorService threadPool;
-    private volatile boolean running;
-    private final List<ClientSession> clientSessions;
-    private final List<ServerListener> listeners;
-    private final Logger logger;
+    // 使用配置中的连接超时设置（秒）
+    private ServerConfig config; // 服务器配置
+    private UserManager userManager; // 用户管理器
+    private ServerSocket serverSocket; // 服务器套接字
+    private ExecutorService threadPool; // 线程池，用于处理客户端连接
+    private volatile boolean running; // 服务器运行状态
+    private final List<ClientSession> clientSessions; // 客户端会话列表
+    private final List<ServerListener> listeners; // 服务器事件监听器列表
+    private final Logger logger; // 日志记录器
 
     public interface ServerListener {
         void onServerStarted();
@@ -79,10 +82,15 @@ public class FtpServer {
         listeners.remove(listener);
     }
 
+/**
+ * 启动FTP服务器
+ * @throws IOException 如果启动过程中出现IO错误
+ */
     public synchronized void start() throws IOException {
         if (running) {
             throw new IllegalStateException("Server is already running");
         }
+        // 确保根目录存在
         File rootDir = new File(config.getRootDirectory());
         if (!rootDir.exists()) {
             boolean created = rootDir.mkdirs();
@@ -90,21 +98,39 @@ public class FtpServer {
                 logger.info("Root directory created: " + rootDir.getAbsolutePath(), "FtpServer", "-");
             }
         }
-        threadPool = Executors.newCachedThreadPool();
+        // 使用有界线程池，最大线程数为最大连接数的2倍
+        int maxThreads = Math.max(config.getMaxConnections() * 2, 10);
+        threadPool = new java.util.concurrent.ThreadPoolExecutor(
+            5, // 核心线程数
+            maxThreads, // 最大线程数
+            60L, TimeUnit.SECONDS, // 线程空闲时间
+            new java.util.concurrent.LinkedBlockingQueue<>(config.getMaxConnections()), // 工作队列
+            new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy() // 拒绝策略
+        );
+        // 创建服务器套接字并开始监听
         serverSocket = new ServerSocket(config.getPort());
         serverSocket.setSoTimeout(5000);
         running = true;
         logger.info("FTP Server started on port " + config.getPort(), "FtpServer", "-");
+        // 通知监听器服务器已启动
         listeners.forEach(ServerListener::onServerStarted);
+        // 启动接受连接的线程
         new Thread(this::acceptLoop, "FTP-Server-Acceptor").start();
     }
 
+/**
+ * 接受客户端连接的循环
+ */
     private void acceptLoop() {
         while (running) {
             try {
+                // 接受客户端连接
                 Socket clientSocket = serverSocket.accept();
-                clientSocket.setSoTimeout(DEFAULT_CONNECTION_TIMEOUT);
+                // 设置连接超时
+                clientSocket.setSoTimeout(config.getConnectionTimeout() * 1000);
                 String clientIp = clientSocket.getInetAddress().getHostAddress();
+                
+                // 检查是否达到最大连接数
                 if (clientSessions.size() >= config.getMaxConnections()) {
                     logger.warn("Connection rejected: max connections reached", "FtpServer", clientIp);
                     try {
@@ -114,10 +140,16 @@ public class FtpServer {
                     }
                     continue;
                 }
+                
+                // 创建客户端会话
                 ClientSession session = new ClientSession(clientSocket);
                 clientSessions.add(session);
                 logger.info("Client connected: " + session.getClientAddress(), "FtpServer", session.getClientAddress());
+                
+                // 通知监听器客户端已连接
                 listeners.forEach(l -> l.onClientConnected(session));
+                
+                // 启动客户端处理线程
                 session.handlerThread = new Thread(() -> handleClient(session), "FTP-Client-" + session.getClientPort());
                 session.handlerThread.start();
             } catch (IOException e) {
