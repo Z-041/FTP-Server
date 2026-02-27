@@ -10,14 +10,29 @@ public class RetrCommand implements FtpCommand {
     @Override
     public void execute(FtpSession session, String argument) {
         if (session.getCurrentUser() != null && 
-            !session.getCurrentUser().hasPermission(User.Permission.READ)) {
+            !session.getCurrentUser().hasPermission(com.ftpserver.user.User.Permission.READ)) {
             session.sendResponse("550 Permission denied");
             return;
         }
         String filePath = session.resolvePath(argument);
+        
+        // 检查路径安全性
+        if (!session.getPathResolver().isPathSafe(filePath)) {
+            session.sendResponse("550 Path not allowed");
+            return;
+        }
+        
         File file = new File(session.getRealPath(filePath));
-        if (!file.exists() || !file.isFile()) {
+        if (!file.exists()) {
             session.sendResponse("550 File not found");
+            return;
+        }
+        if (!file.isFile()) {
+            session.sendResponse("550 Not a file");
+            return;
+        }
+        if (!file.canRead()) {
+            session.sendResponse("550 Permission denied");
             return;
         }
         session.sendResponse("150 Opening " + (session.isAsciiMode() ? "ASCII" : "BINARY") + 

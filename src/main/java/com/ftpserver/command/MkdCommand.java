@@ -14,7 +14,18 @@ public class MkdCommand implements FtpCommand {
             return;
         }
         String fullPath = session.resolvePath(argument);
+        
+        // 检查路径安全性
+        if (!session.getPathResolver().isPathSafe(fullPath)) {
+            session.sendResponse("550 Path not allowed");
+            return;
+        }
+        
         File dir = new File(session.getRealPath(fullPath));
+        if (dir.exists()) {
+            session.sendResponse("550 Directory already exists");
+            return;
+        }
         if (dir.mkdirs()) {
             session.sendResponse("257 \"" + fullPath + "\" created");
         } else {

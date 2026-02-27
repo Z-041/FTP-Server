@@ -10,15 +10,37 @@ public class StorCommand implements FtpCommand {
     @Override
     public void execute(FtpSession session, String argument) {
         if (session.getCurrentUser() != null && 
-            !session.getCurrentUser().hasPermission(User.Permission.WRITE)) {
+            !session.getCurrentUser().hasPermission(com.ftpserver.user.User.Permission.WRITE)) {
             session.sendResponse("550 Permission denied");
             return;
         }
         String filePath = session.resolvePath(argument);
+        
+        // 检查路径安全性
+        if (!session.getPathResolver().isPathSafe(filePath)) {
+            session.sendResponse("550 Path not allowed");
+            return;
+        }
+        
         File file = new File(session.getRealPath(filePath));
         File parentDir = file.getParentFile();
-        if (parentDir != null && !parentDir.exists()) {
-            parentDir.mkdirs();
+        if (parentDir != null) {
+            if (!parentDir.exists()) {
+                // 检查创建目录权限
+                if (session.getCurrentUser() != null && 
+                    !session.getCurrentUser().hasPermission(com.ftpserver.user.User.Permission.CREATE_DIR)) {
+                    session.sendResponse("550 Permission denied");
+                    return;
+                }
+                boolean created = parentDir.mkdirs();
+                if (!created) {
+                    session.sendResponse("550 Failed to create directory");
+                    return;
+                }
+            } else if (!parentDir.canWrite()) {
+                session.sendResponse("550 Permission denied");
+                return;
+            }
         }
         session.sendResponse("150 Opening " + (session.isAsciiMode() ? "ASCII" : "BINARY") + 
                            " mode data connection for " + file.getName());

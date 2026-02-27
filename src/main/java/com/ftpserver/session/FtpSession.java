@@ -46,7 +46,8 @@ public class FtpSession implements AutoCloseable {
         this.config = config;
         this.userManager = userManager;
         this.logger = Logger.getInstance();
-        this.clientIp = controlSocket.getInetAddress().getHostAddress();
+        String rawIp = controlSocket.getInetAddress().getHostAddress();
+        this.clientIp = rawIp.equals("0:0:0:0:0:0:0:1") ? "127.0.0.1" : rawIp;
         this.reader = new BufferedReader(new InputStreamReader(controlSocket.getInputStream(), "UTF-8"));
         this.writer = new PrintWriter(new OutputStreamWriter(controlSocket.getOutputStream(), "UTF-8"), true);
         this.pathResolver = new PathResolver(config.getRootDirectory());

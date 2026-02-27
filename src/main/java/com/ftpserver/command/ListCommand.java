@@ -20,9 +20,20 @@ public class ListCommand implements FtpCommand {
             listPath = "";
         }
         listPath = listPath.isEmpty() ? session.getCurrentDirectory() : session.resolvePath(listPath);
+        
+        // 检查路径安全性
+        if (!session.getPathResolver().isPathSafe(listPath)) {
+            session.sendResponse("550 Path not allowed");
+            return;
+        }
+        
         File dir = new File(session.getRealPath(listPath));
         if (!dir.exists()) {
             session.sendResponse("550 Directory not found");
+            return;
+        }
+        if (!dir.isDirectory()) {
+            session.sendResponse("550 Not a directory");
             return;
         }
         session.sendResponse("150 Opening ASCII mode data connection for file list");
