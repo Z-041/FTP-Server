@@ -1,17 +1,17 @@
 package com.ftpserver.data;
 
+import com.ftpserver.util.Logger;
+
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.logging.Logger;
-import java.util.logging.Level;
 
 public class PassiveDataConnection extends DataConnection {
     private ServerSocket serverSocket;
     private final InetAddress serverAddress;
     private final int port;
-    private static final Logger logger = Logger.getLogger(PassiveDataConnection.class.getName());
+    private static final Logger logger = Logger.getInstance();
 
     public PassiveDataConnection(InetAddress serverAddress, int port) throws DataConnectionException {
         try {
@@ -19,10 +19,10 @@ public class PassiveDataConnection extends DataConnection {
             this.port = port;
             this.serverSocket = new ServerSocket(port, 1, serverAddress);
             this.serverSocket.setSoTimeout(60000);
-            logger.log(Level.INFO, "Passive data connection server socket created on " + serverAddress + ":" + getPort());
+            logger.info("Passive data connection server socket created on " + serverAddress + ":" + getPort(), "PassiveDataConnection", null);
         } catch (IOException e) {
-            logger.log(Level.SEVERE, "Failed to create passive data connection server socket", e);
-            throw new DataConnectionException("Failed to create passive data connection server socket", 
+            logger.error("Failed to create passive data connection server socket: " + e.getMessage(), "PassiveDataConnection", null);
+            throw new DataConnectionException("Failed to create passive data connection server socket",
                                            DataConnectionException.ErrorType.CONNECTION_ERROR, e);
         }
     }
@@ -38,13 +38,13 @@ public class PassiveDataConnection extends DataConnection {
     @Override
     public void connect() throws DataConnectionException {
         try {
-            logger.log(Level.INFO, "Waiting for client connection on " + serverAddress + ":" + getPort());
+            logger.info("Waiting for client connection on " + serverAddress + ":" + getPort(), "PassiveDataConnection", null);
             socket = serverSocket.accept();
             socket.setSoTimeout(30000);
-            logger.log(Level.INFO, "Passive data connection established with " + socket.getInetAddress());
+            logger.info("Passive data connection established with " + socket.getInetAddress(), "PassiveDataConnection", socket.getInetAddress().getHostAddress());
         } catch (IOException e) {
-            logger.log(Level.SEVERE, "Failed to accept passive data connection", e);
-            throw new DataConnectionException("Failed to accept passive data connection", 
+            logger.error("Failed to accept passive data connection: " + e.getMessage(), "PassiveDataConnection", null);
+            throw new DataConnectionException("Failed to accept passive data connection",
                                            DataConnectionException.ErrorType.CONNECTION_ERROR, e);
         }
     }
@@ -56,13 +56,13 @@ public class PassiveDataConnection extends DataConnection {
             if (serverSocket != null && !serverSocket.isClosed()) {
                 try {
                     serverSocket.close();
-                    logger.log(Level.INFO, "Passive data connection server socket closed");
+                    logger.info("Passive data connection server socket closed", "PassiveDataConnection", null);
                 } catch (IOException e) {
-                    logger.log(Level.WARNING, "Error closing server socket", e);
+                    logger.warn("Error closing server socket: " + e.getMessage(), "PassiveDataConnection", null);
                 }
             }
         } catch (DataConnectionException e) {
-            logger.log(Level.SEVERE, "Error closing passive data connection", e);
+            logger.error("Error closing passive data connection: " + e.getMessage(), "PassiveDataConnection", null);
             throw e;
         }
     }

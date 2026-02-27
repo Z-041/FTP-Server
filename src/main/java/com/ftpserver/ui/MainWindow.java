@@ -47,6 +47,7 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
     private JPanel contentPanel;
     private CardLayout cardLayout;
     private javax.swing.Timer updateTimer;
+    private boolean logsContentInitialized = false;
 
     public MainWindow() {
         loadConfig();
@@ -67,6 +68,37 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
         userManager = new UserManager(USERS_PATH);
         logger.setLogDirectory(config.getLogDirectory());
         logger.addListener(this);
+
+        // 设置GUI日志监听器
+        setupGUILogListener();
+    }
+
+    private void setupGUILogListener() {
+        logger.addListener(entry -> SwingUtilities.invokeLater(() -> {
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            String line = String.format("[%s] [%s] %s%n",
+                    entry.timestamp.format(fmt), entry.level, entry.message);
+
+            // 更新日志页面
+            logsContent.appendLog(line);
+
+            // 同步更新概览页面的最近活动区域
+            JTextArea overviewLogArea = overviewContent.getLogTextArea();
+            overviewLogArea.append(line);
+            overviewLogArea.setCaretPosition(overviewLogArea.getDocument().getLength());
+
+            // 限制最近活动区域只显示最近50条日志，防止内存无限增长
+            try {
+                int lines = overviewLogArea.getLineCount();
+                if (lines > 50) {
+                    int end = overviewLogArea.getLineStartOffset(0);
+                    int start = overviewLogArea.getLineStartOffset(lines - 50);
+                    overviewLogArea.replaceRange("", end, start);
+                }
+            } catch (Exception ex) {
+                // 忽略文档操作异常
+            }
+        }));
     }
 
     private void setupServer() {
@@ -272,29 +304,10 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
     }
 
     private void setupLogsContent() {
-        logger.addListener(entry -> SwingUtilities.invokeLater(() -> {
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-            String line = String.format("[%s] [%s] %s%n",
-                    entry.timestamp.format(fmt), entry.level, entry.message);
-            logsContent.appendLog(line);
-
-            // 同步更新概览页面的最近活动区域
-            JTextArea overviewLogArea = overviewContent.getLogTextArea();
-            overviewLogArea.append(line);
-            overviewLogArea.setCaretPosition(overviewLogArea.getDocument().getLength());
-
-            // 限制最近活动区域只显示最近50条日志，防止内存无限增长
-            try {
-                int lines = overviewLogArea.getLineCount();
-                if (lines > 50) {
-                    int end = overviewLogArea.getLineStartOffset(0);
-                    int start = overviewLogArea.getLineStartOffset(lines - 50);
-                    overviewLogArea.replaceRange("", end, start);
-                }
-            } catch (Exception ex) {
-                // 忽略文档操作异常
-            }
-        }));
+        if (logsContentInitialized) {
+            return;
+        }
+        logsContentInitialized = true;
 
         logsContent.getClearBtn().addActionListener(e -> {
             logger.clearLogs();

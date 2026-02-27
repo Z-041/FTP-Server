@@ -1,9 +1,9 @@
 package com.ftpserver.data;
 
+import com.ftpserver.util.Logger;
+
 import java.io.*;
 import java.net.*;
-import java.util.logging.Logger;
-import java.util.logging.Level;
 
 /**
  * 数据连接抽象类，处理FTP数据传输
@@ -13,7 +13,7 @@ public abstract class DataConnection implements AutoCloseable {
     protected InputStream inputStream;
     protected OutputStream outputStream;
     protected boolean asciiMode;
-    protected static final Logger logger = Logger.getLogger(DataConnection.class.getName());
+    protected static final Logger logger = Logger.getInstance();
 
     /**
      * 构造函数
@@ -62,7 +62,8 @@ public abstract class DataConnection implements AutoCloseable {
             }
             return inputStream;
         } catch (IOException e) {
-            logger.log(Level.SEVERE, "Failed to get input stream", e);
+            String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
+            logger.error("Failed to get input stream: " + e.getMessage(), "DataConnection", ip);
             throw new DataConnectionException("Failed to get input stream", DataConnectionException.ErrorType.RESOURCE_ERROR, e);
         }
     }
@@ -85,7 +86,8 @@ public abstract class DataConnection implements AutoCloseable {
             }
             return outputStream;
         } catch (IOException e) {
-            logger.log(Level.SEVERE, "Failed to get output stream", e);
+            String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
+            logger.error("Failed to get output stream: " + e.getMessage(), "DataConnection", ip);
             throw new DataConnectionException("Failed to get output stream", DataConnectionException.ErrorType.RESOURCE_ERROR, e);
         }
     }
@@ -111,24 +113,26 @@ public abstract class DataConnection implements AutoCloseable {
             long totalBytesSent = 0;
             long fileLength = file.length();
             
-            logger.log(Level.INFO, "Starting file transfer: " + file.getName() + " (" + fileLength + " bytes)");
-            
+            String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
+            logger.info("Starting file transfer: " + file.getName() + " (" + fileLength + " bytes)", "DataConnection", ip);
+
             while ((bytesRead = fis.read(buffer)) != -1) {
                 os.write(buffer, 0, bytesRead);
                 totalBytesSent += bytesRead;
             }
             os.flush();
-            
+
             // 验证传输大小
             if (totalBytesSent != fileLength) {
-                logger.log(Level.WARNING, "File transfer incomplete: expected " + fileLength + " bytes, sent " + totalBytesSent);
-                throw new DataConnectionException("File transfer incomplete: expected " + fileLength + " bytes, sent " + totalBytesSent, 
+                logger.warn("File transfer incomplete: expected " + fileLength + " bytes, sent " + totalBytesSent, "DataConnection", ip);
+                throw new DataConnectionException("File transfer incomplete: expected " + fileLength + " bytes, sent " + totalBytesSent,
                                                 DataConnectionException.ErrorType.TRANSFER_ERROR);
             }
-            
-            logger.log(Level.INFO, "File transfer completed: " + file.getName() + " (" + totalBytesSent + " bytes)");
+
+            logger.info("File transfer completed: " + file.getName() + " (" + totalBytesSent + " bytes)", "DataConnection", ip);
         } catch (IOException e) {
-            logger.log(Level.SEVERE, "File transfer failed", e);
+            String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
+            logger.error("File transfer failed: " + e.getMessage(), "DataConnection", ip);
             throw new DataConnectionException("File transfer failed", DataConnectionException.ErrorType.TRANSFER_ERROR, e);
         }
     }
@@ -154,17 +158,19 @@ public abstract class DataConnection implements AutoCloseable {
                 int bytesRead;
                 long totalBytesReceived = 0;
                 
-                logger.log(Level.INFO, "Starting file reception: " + file.getName());
-                
-                while ((bytesRead = is.read(buffer)) != -1) {
-                    fos.write(buffer, 0, bytesRead);
-                    totalBytesReceived += bytesRead;
-                }
-                
-                logger.log(Level.INFO, "File reception completed: " + file.getName() + " (" + totalBytesReceived + " bytes)");
+                String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
+            logger.info("Starting file reception: " + file.getName(), "DataConnection", ip);
+
+            while ((bytesRead = is.read(buffer)) != -1) {
+                fos.write(buffer, 0, bytesRead);
+                totalBytesReceived += bytesRead;
+            }
+
+            logger.info("File reception completed: " + file.getName() + " (" + totalBytesReceived + " bytes)", "DataConnection", ip);
             }
         } catch (IOException e) {
-            logger.log(Level.SEVERE, "File reception failed", e);
+            String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
+            logger.error("File reception failed: " + e.getMessage(), "DataConnection", ip);
             throw new DataConnectionException("File reception failed", DataConnectionException.ErrorType.TRANSFER_ERROR, e);
         }
     }
@@ -176,12 +182,14 @@ public abstract class DataConnection implements AutoCloseable {
      */
     public void sendListing(String listing) throws DataConnectionException {
         try (OutputStream os = getOutputStream()) {
-            logger.log(Level.INFO, "Sending directory listing");
+            String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
+            logger.info("Sending directory listing", "DataConnection", ip);
             os.write(listing.getBytes("UTF-8"));
             os.flush();
-            logger.log(Level.INFO, "Directory listing sent successfully");
+            logger.info("Directory listing sent successfully", "DataConnection", ip);
         } catch (IOException e) {
-            logger.log(Level.SEVERE, "Failed to send directory listing", e);
+            String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
+            logger.error("Failed to send directory listing: " + e.getMessage(), "DataConnection", ip);
             throw new DataConnectionException("Failed to send directory listing", DataConnectionException.ErrorType.TRANSFER_ERROR, e);
         }
     }
@@ -193,11 +201,12 @@ public abstract class DataConnection implements AutoCloseable {
     @Override
     public void close() throws DataConnectionException {
         try {
+            String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
             if (inputStream != null) {
                 try {
                     inputStream.close();
                 } catch (IOException e) {
-                    logger.log(Level.WARNING, "Error closing input stream", e);
+                    logger.warn("Error closing input stream: " + e.getMessage(), "DataConnection", ip);
                 } finally {
                     inputStream = null;
                 }
@@ -206,7 +215,7 @@ public abstract class DataConnection implements AutoCloseable {
                 try {
                     outputStream.close();
                 } catch (IOException e) {
-                    logger.log(Level.WARNING, "Error closing output stream", e);
+                    logger.warn("Error closing output stream: " + e.getMessage(), "DataConnection", ip);
                 } finally {
                     outputStream = null;
                 }
@@ -215,14 +224,15 @@ public abstract class DataConnection implements AutoCloseable {
                 try {
                     socket.close();
                 } catch (IOException e) {
-                    logger.log(Level.WARNING, "Error closing socket", e);
+                    logger.warn("Error closing socket: " + e.getMessage(), "DataConnection", ip);
                 } finally {
                     socket = null;
                 }
             }
-            logger.log(Level.INFO, "Data connection closed");
+            logger.info("Data connection closed", "DataConnection", ip);
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "Error closing data connection", e);
+            String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
+            logger.error("Error closing data connection: " + e.getMessage(), "DataConnection", ip);
             throw new DataConnectionException("Error closing data connection", DataConnectionException.ErrorType.RESOURCE_ERROR, e);
         }
     }

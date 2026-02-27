@@ -1,15 +1,15 @@
 package com.ftpserver.data;
 
+import com.ftpserver.util.Logger;
+
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.util.logging.Logger;
-import java.util.logging.Level;
 
 public class ActiveDataConnection extends DataConnection {
     private final InetAddress clientAddress;
     private final int clientPort;
-    private static final Logger logger = Logger.getLogger(ActiveDataConnection.class.getName());
+    private static final Logger logger = Logger.getInstance();
 
     public ActiveDataConnection(InetAddress clientAddress, int clientPort) {
         this.clientAddress = clientAddress;
@@ -19,13 +19,13 @@ public class ActiveDataConnection extends DataConnection {
     @Override
     public void connect() throws DataConnectionException {
         try {
-            logger.log(Level.INFO, "Connecting to client " + clientAddress + ":" + clientPort);
+            logger.info("Connecting to client " + clientAddress + ":" + clientPort, "ActiveDataConnection", clientAddress.getHostAddress());
             socket = new Socket(clientAddress, clientPort);
             socket.setSoTimeout(30000);
-            logger.log(Level.INFO, "Active data connection established");
+            logger.info("Active data connection established", "ActiveDataConnection", clientAddress.getHostAddress());
         } catch (IOException e) {
-            logger.log(Level.SEVERE, "Failed to establish active data connection", e);
-            throw new DataConnectionException("Failed to establish active data connection", 
+            logger.error("Failed to establish active data connection: " + e.getMessage(), "ActiveDataConnection", clientAddress.getHostAddress());
+            throw new DataConnectionException("Failed to establish active data connection",
                                            DataConnectionException.ErrorType.CONNECTION_ERROR, e);
         }
     }
