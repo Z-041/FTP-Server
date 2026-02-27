@@ -2,6 +2,11 @@ package com.ftpserver.ui;
 
 import com.ftpserver.config.ServerConfig;
 import com.ftpserver.server.FtpServer;
+import com.ftpserver.ui.content.*;
+import com.ftpserver.ui.model.ClientRow;
+import com.ftpserver.ui.model.UserRow;
+import com.ftpserver.ui.sidebar.Sidebar;
+import com.ftpserver.ui.tray.SystemTrayManager;
 import com.ftpserver.user.User;
 import com.ftpserver.user.UserManager;
 import com.ftpserver.util.Logger;
@@ -9,9 +14,6 @@ import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -21,24 +23,9 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
-import java.awt.AWTException;
-import java.awt.Dimension;
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.PopupMenu;
-import java.awt.SystemTray;
-import java.awt.TrayIcon;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.image.BufferedImage;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.RenderingHints;
-import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
 
 public class ModernMainWindow extends Application implements FtpServer.ServerListener, Logger.LogListener {
 
@@ -56,28 +43,24 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
     private Label statusText;
     private Button startStopButton;
 
-    private Label statPortValue;
-    private Label statConnectionsValue;
-    private Label statMaxConnectionsValue;
-    private Label statUsersValue;
-
-    private ObservableList<ClientRow> clientsData;
-    private ObservableList<UserRow> usersData;
+    private OverviewContent overviewContent;
+    private ClientsContent clientsContent;
+    private UsersContent usersContent;
+    private ConfigContent configContent;
+    private LogsContent logsContent;
+    private Sidebar sidebar;
+    private SystemTrayManager systemTrayManager;
 
     private Timeline updateTimeline;
-    private TextArea logTextArea;
-
-    private java.awt.SystemTray systemTray;
-    private java.awt.TrayIcon trayIcon;
-    private java.awt.MenuItem startStopTrayItem;
-    private boolean trayInitialized = false;
 
     @Override
     public void start(Stage stage) {
         this.primaryStage = stage;
+        // 防止最后一个窗口关闭时自动退出 JavaFX 应用程序
+        Platform.setImplicitExit(false);
         loadConfig();
-        initUI();
         setupServer();
+        initUI();
         initSystemTray();
         startUpdateTimer();
     }
@@ -111,7 +94,8 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
         root.getStyleClass().add("root");
 
         HBox mainLayout = new HBox();
-        mainLayout.getChildren().addAll(createSidebar(), createContentArea());
+        sidebar = new Sidebar();
+        mainLayout.getChildren().addAll(sidebar, createContentArea());
         HBox.setHgrow(mainLayout.getChildren().get(1), Priority.ALWAYS);
 
         root.setCenter(mainLayout);
@@ -122,9 +106,9 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
         primaryStage.setTitle("FTP Server Console");
         primaryStage.setScene(scene);
         primaryStage.setOnCloseRequest(e -> {
-            if (trayInitialized) {
+            if (systemTrayManager.isTrayInitialized()) {
                 e.consume();
-                hideToTray();
+                systemTrayManager.hideToTray();
             } else {
                 cleanup();
                 if (ftpServer.isRunning()) {
@@ -133,74 +117,8 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
             }
         });
         primaryStage.show();
-    }
 
-    private VBox createSidebar() {
-        VBox sidebar = new VBox();
-        sidebar.getStyleClass().add("sidebar");
-        sidebar.setPrefWidth(260);
-
-        Label title = new Label("FTP Server");
-        title.getStyleClass().add("sidebar-title");
-
-        Label subtitle = new Label("Advanced File Transfer");
-        subtitle.getStyleClass().add("sidebar-subtitle");
-
-        VBox navItems = new VBox(0);
-        navItems.setFillWidth(true);
-
-        Button navOverview = createNavItem("Overview", true);
-        Button navClients = createNavItem("Clients", false);
-        Button navUsers = createNavItem("Users", false);
-        Button navConfig = createNavItem("Configuration", false);
-        Button navLogs = createNavItem("Logs", false);
-
-        navItems.getChildren().addAll(navOverview, navClients, navUsers, navConfig, navLogs);
-
-        navOverview.setOnAction(e -> {
-            setActiveNav(navItems, navOverview);
-            showContent("overview");
-        });
-        navClients.setOnAction(e -> {
-            setActiveNav(navItems, navClients);
-            showContent("clients");
-        });
-        navUsers.setOnAction(e -> {
-            setActiveNav(navItems, navUsers);
-            showContent("users");
-        });
-        navConfig.setOnAction(e -> {
-            setActiveNav(navItems, navConfig);
-            showContent("config");
-        });
-        navLogs.setOnAction(e -> {
-            setActiveNav(navItems, navLogs);
-            showContent("logs");
-        });
-
-        Region spacer = new Region();
-        VBox.setVgrow(spacer, Priority.ALWAYS);
-
-        sidebar.getChildren().addAll(title, subtitle, navItems, spacer);
-        return sidebar;
-    }
-
-    private Button createNavItem(String text, boolean active) {
-        Button btn = new Button(text);
-        btn.getStyleClass().add("nav-item");
-        btn.setMaxWidth(Double.MAX_VALUE);
-        btn.setAlignment(Pos.CENTER_LEFT);
-        if (active) {
-            btn.getStyleClass().add("active");
-        }
-        return btn;
-    }
-
-    private void setActiveNav(VBox navItems, Button active) {
-        for (javafx.scene.Node node : navItems.getChildren()) {
-            node.getStyleClass().remove("active");
-        }
-        active.getStyleClass().add("active");
+        setupNavigation();
     }
 
     private VBox createContentArea() {
@@ -211,7 +129,8 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
         HBox header = createHeader();
 
         contentStack = new StackPane();
-        contentStack.getChildren().add(createOverviewContent());
+        overviewContent = new OverviewContent();
+        contentStack.getChildren().add(overviewContent);
         VBox.setVgrow(contentStack, Priority.ALWAYS);
 
         contentArea.getChildren().addAll(header, contentStack);
@@ -252,307 +171,141 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
         return header;
     }
 
-    private VBox createOverviewContent() {
-        VBox content = new VBox(24);
-        content.setFillWidth(true);
-
-        GridPane statsGrid = new GridPane();
-        statsGrid.setHgap(20);
-        statsGrid.setVgap(20);
-        statsGrid.setPadding(new Insets(0));
-
-        statPortValue = new Label(String.valueOf(config.getPort()));
-        statConnectionsValue = new Label("0");
-        statMaxConnectionsValue = new Label(String.valueOf(config.getMaxConnections()));
-        statUsersValue = new Label(String.valueOf(userManager.getAllUsers().size()));
-
-        statsGrid.add(createStatCard("Server Port", statPortValue, "🔌"), 0, 0);
-        statsGrid.add(createStatCard("Active Connections", statConnectionsValue, "👥"), 1, 0);
-        statsGrid.add(createStatCard("Max Connections", statMaxConnectionsValue, "📊"), 0, 1);
-        statsGrid.add(createStatCard("Total Users", statUsersValue, "👤"), 1, 1);
-
-        ColumnConstraints col1 = new ColumnConstraints();
-        col1.setPercentWidth(50);
-        ColumnConstraints col2 = new ColumnConstraints();
-        col2.setPercentWidth(50);
-        statsGrid.getColumnConstraints().addAll(col1, col2);
-
-        VBox recentActivity = new VBox(16);
-        Label activityTitle = new Label("Recent Activity");
-        activityTitle.getStyleClass().add("card-title");
-
-        logTextArea = new TextArea();
-        logTextArea.getStyleClass().add("log-area");
-        logTextArea.setEditable(false);
-        logTextArea.setPrefRowCount(12);
-
-        recentActivity.getChildren().addAll(activityTitle, logTextArea);
-
-        content.getChildren().addAll(statsGrid, recentActivity);
-        return content;
-    }
-
-    private VBox createStatCard(String label, Label valueLabel, String icon) {
-        VBox card = new VBox(12);
-        card.getStyleClass().add("stat-card");
-        card.setPadding(new Insets(24));
-
-        Label iconLabel = new Label(icon);
-        iconLabel.getStyleClass().add("stat-icon");
-
-        valueLabel.getStyleClass().add("stat-value");
-
-        Label labelText = new Label(label);
-        labelText.getStyleClass().add("stat-label");
-
-        card.getChildren().addAll(iconLabel, valueLabel, labelText);
-        return card;
-    }
-
-    private VBox createClientsContent() {
-        VBox content = new VBox(16);
-        content.setFillWidth(true);
-
-        Label title = new Label("Connected Clients");
-        title.getStyleClass().add("card-title");
-
-        clientsData = FXCollections.observableArrayList();
-        TableView<ClientRow> table = new TableView<>(clientsData);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.getStyleClass().add("table-view");
-
-        TableColumn<ClientRow, String> ipCol = new TableColumn<>("IP Address");
-        ipCol.setCellValueFactory(c -> c.getValue().ip);
-
-        TableColumn<ClientRow, String> portCol = new TableColumn<>("Port");
-        portCol.setCellValueFactory(c -> c.getValue().port);
-
-        TableColumn<ClientRow, String> timeCol = new TableColumn<>("Connected Since");
-        timeCol.setCellValueFactory(c -> c.getValue().connectTime);
-
-        TableColumn<ClientRow, String> statusCol = new TableColumn<>("Status");
-        statusCol.setCellValueFactory(c -> c.getValue().status);
-
-        table.getColumns().addAll(ipCol, portCol, timeCol, statusCol);
-
-        content.getChildren().addAll(title, table);
-        VBox.setVgrow(table, Priority.ALWAYS);
-        return content;
-    }
-
-    private VBox createUsersContent() {
-        VBox content = new VBox(16);
-        content.setFillWidth(true);
-
-        HBox headerBar = new HBox();
-        headerBar.setAlignment(Pos.CENTER_LEFT);
-
-        Label title = new Label("User Management");
-        title.getStyleClass().add("card-title");
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        Button addBtn = new Button("Add User");
-        addBtn.getStyleClass().add("btn-primary");
-        addBtn.setOnAction(e -> showAddUserDialog());
-
-        Button editBtn = new Button("Edit User");
-        editBtn.getStyleClass().add("btn-secondary");
-
-        Button deleteBtn = new Button("Delete User");
-        deleteBtn.getStyleClass().add("btn-danger");
-
-        headerBar.getChildren().addAll(title, spacer, addBtn, editBtn, deleteBtn);
-        HBox.setMargin(addBtn, new Insets(0, 12, 0, 0));
-        HBox.setMargin(editBtn, new Insets(0, 12, 0, 0));
-
-        usersData = FXCollections.observableArrayList();
-        TableView<UserRow> table = new TableView<>(usersData);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.getStyleClass().add("table-view");
-
-        TableColumn<UserRow, String> userCol = new TableColumn<>("Username");
-        userCol.setCellValueFactory(c -> c.getValue().username);
-
-        TableColumn<UserRow, String> homeCol = new TableColumn<>("Home Directory");
-        homeCol.setCellValueFactory(c -> c.getValue().homeDir);
-
-        TableColumn<UserRow, String> enabledCol = new TableColumn<>("Enabled");
-        enabledCol.setCellValueFactory(c -> c.getValue().enabled);
-
-        TableColumn<UserRow, String> permsCol = new TableColumn<>("Permissions");
-        permsCol.setCellValueFactory(c -> c.getValue().permissions);
-
-        table.getColumns().addAll(userCol, homeCol, enabledCol, permsCol);
-
-        editBtn.setOnAction(e -> {
-            UserRow selected = table.getSelectionModel().getSelectedItem();
-            if (selected != null) {
-                showEditUserDialog(selected.username.get());
-            }
+    private void setupNavigation() {
+        sidebar.getNavOverview().setOnAction(e -> {
+            sidebar.setActiveNav(sidebar.getNavOverview());
+            showContent("overview");
         });
-
-        deleteBtn.setOnAction(e -> {
-            UserRow selected = table.getSelectionModel().getSelectedItem();
-            if (selected != null) {
-                deleteUser(selected.username.get());
-            }
+        sidebar.getNavClients().setOnAction(e -> {
+            sidebar.setActiveNav(sidebar.getNavClients());
+            showContent("clients");
         });
-
-        refreshUsersTable();
-
-        content.getChildren().addAll(headerBar, table);
-        VBox.setVgrow(table, Priority.ALWAYS);
-        return content;
-    }
-
-    private VBox createConfigContent() {
-        VBox content = new VBox(16);
-        content.setFillWidth(true);
-
-        VBox card = new VBox(20);
-        card.getStyleClass().add("card");
-        card.setPadding(new Insets(24));
-
-        Label cardTitle = new Label("Server Configuration");
-        cardTitle.getStyleClass().add("card-title");
-
-        GridPane form = new GridPane();
-        form.setHgap(16);
-        form.setVgap(20);
-
-        TextField portField = new TextField(String.valueOf(config.getPort()));
-        portField.getStyleClass().add("text-field");
-
-        TextField rootDirField = new TextField(config.getRootDirectory());
-        rootDirField.getStyleClass().add("text-field");
-
-        Button browseBtn = new Button("Browse");
-        browseBtn.getStyleClass().add("btn-secondary");
-        browseBtn.setOnAction(e -> {
-            DirectoryChooser dirChooser = new DirectoryChooser();
-            dirChooser.setTitle("Select Root Directory");
-            File dir = dirChooser.showDialog(primaryStage);
-            if (dir != null) {
-                rootDirField.setText(dir.getAbsolutePath());
-            }
+        sidebar.getNavUsers().setOnAction(e -> {
+            sidebar.setActiveNav(sidebar.getNavUsers());
+            showContent("users");
         });
-
-        HBox rootDirBox = new HBox(12);
-        rootDirBox.getChildren().addAll(rootDirField, browseBtn);
-        HBox.setHgrow(rootDirField, Priority.ALWAYS);
-
-        TextField maxConnField = new TextField(String.valueOf(config.getMaxConnections()));
-        maxConnField.getStyleClass().add("text-field");
-
-        form.add(new Label("Port:"), 0, 0);
-        form.add(portField, 1, 0);
-        form.add(new Label("Root Directory:"), 0, 1);
-        form.add(rootDirBox, 1, 1);
-        form.add(new Label("Max Connections:"), 0, 2);
-        form.add(maxConnField, 1, 2);
-
-        ColumnConstraints labelCol = new ColumnConstraints();
-        labelCol.setMinWidth(120);
-        ColumnConstraints fieldCol = new ColumnConstraints();
-        fieldCol.setHgrow(Priority.ALWAYS);
-        form.getColumnConstraints().addAll(labelCol, fieldCol);
-
-        for (javafx.scene.Node node : form.getChildren()) {
-            if (node instanceof Label) {
-                ((Label) node).getStyleClass().add("form-label");
-            }
-        }
-
-        HBox buttonBar = new HBox();
-        buttonBar.setAlignment(Pos.CENTER_RIGHT);
-
-        Button saveBtn = new Button("Save Configuration");
-        saveBtn.getStyleClass().add("btn-primary");
-        saveBtn.setOnAction(e -> {
-            try {
-                config.setPort(Integer.parseInt(portField.getText()));
-                config.setRootDirectory(rootDirField.getText());
-                config.setMaxConnections(Integer.parseInt(maxConnField.getText()));
-                config.save(CONFIG_PATH);
-                updateStats();
-                showAlert("Success", "Configuration saved successfully!");
-            } catch (Exception ex) {
-                showAlert("Error", "Failed to save: " + ex.getMessage());
-            }
+        sidebar.getNavConfig().setOnAction(e -> {
+            sidebar.setActiveNav(sidebar.getNavConfig());
+            showContent("config");
         });
-
-        buttonBar.getChildren().add(saveBtn);
-
-        card.getChildren().addAll(cardTitle, form, buttonBar);
-
-        content.getChildren().add(card);
-        return content;
-    }
-
-    private VBox createLogsContent() {
-        VBox content = new VBox(16);
-        content.setFillWidth(true);
-
-        Label title = new Label("Server Logs");
-        title.getStyleClass().add("card-title");
-
-        TextArea logsArea = new TextArea();
-        logsArea.getStyleClass().add("log-area");
-        logsArea.setEditable(false);
-
-        logger.addListener(entry -> Platform.runLater(() -> {
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-            String line = String.format("[%s] [%s] %s%n",
-                    entry.timestamp.format(fmt), entry.level, entry.message);
-            logsArea.appendText(line);
-        }));
-
-        HBox controls = new HBox(12);
-        controls.setAlignment(Pos.CENTER_LEFT);
-
-        TextField searchField = new TextField();
-        searchField.getStyleClass().add("text-field");
-        searchField.setPromptText("Search logs...");
-        HBox.setHgrow(searchField, Priority.ALWAYS);
-
-        Button searchBtn = new Button("Search");
-        searchBtn.getStyleClass().add("btn-secondary");
-
-        Button clearBtn = new Button("Clear Logs");
-        clearBtn.getStyleClass().add("btn-danger");
-        clearBtn.setOnAction(e -> {
-            logger.clearLogs();
-            logsArea.clear();
+        sidebar.getNavLogs().setOnAction(e -> {
+            sidebar.setActiveNav(sidebar.getNavLogs());
+            showContent("logs");
         });
-
-        controls.getChildren().addAll(searchField, searchBtn, clearBtn);
-
-        content.getChildren().addAll(title, controls, logsArea);
-        VBox.setVgrow(logsArea, Priority.ALWAYS);
-        return content;
     }
 
     private void showContent(String page) {
         contentStack.getChildren().clear();
+        javafx.scene.Node content = null;
+        
         switch (page) {
             case "overview":
-                contentStack.getChildren().add(createOverviewContent());
+                if (overviewContent == null) {
+                    overviewContent = new OverviewContent();
+                }
+                content = overviewContent;
                 break;
             case "clients":
-                contentStack.getChildren().add(createClientsContent());
+                if (clientsContent == null) {
+                    clientsContent = new ClientsContent();
+                }
+                content = clientsContent;
                 break;
             case "users":
-                contentStack.getChildren().add(createUsersContent());
+                if (usersContent == null) {
+                    usersContent = new UsersContent();
+                    setupUsersContent();
+                }
+                content = usersContent;
                 break;
             case "config":
-                contentStack.getChildren().add(createConfigContent());
+                if (configContent == null) {
+                    configContent = new ConfigContent();
+                    setupConfigContent();
+                }
+                content = configContent;
                 break;
             case "logs":
-                contentStack.getChildren().add(createLogsContent());
+                if (logsContent == null) {
+                    logsContent = new LogsContent();
+                    setupLogsContent();
+                }
+                content = logsContent;
                 break;
         }
+        
+        if (content != null) {
+            content.getStyleClass().add("slide-in");
+            contentStack.getChildren().add(content);
+            
+            // 添加动画效果
+            javafx.animation.Timeline timeline = new javafx.animation.Timeline(
+                new javafx.animation.KeyFrame(javafx.util.Duration.ZERO, new javafx.animation.KeyValue(content.opacityProperty(), 0)),
+                new javafx.animation.KeyFrame(javafx.util.Duration.millis(300), new javafx.animation.KeyValue(content.opacityProperty(), 1)),
+                new javafx.animation.KeyFrame(javafx.util.Duration.ZERO, new javafx.animation.KeyValue(content.translateXProperty(), -20)),
+                new javafx.animation.KeyFrame(javafx.util.Duration.millis(300), new javafx.animation.KeyValue(content.translateXProperty(), 0))
+            );
+            timeline.play();
+        }
+    }
+
+    private void setupUsersContent() {
+        usersContent.getAddBtn().setOnAction(e -> showAddUserDialog());
+        usersContent.getEditBtn().setOnAction(e -> {
+            UserRow selected = usersContent.getTable().getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                showEditUserDialog(selected.username.get());
+            }
+        });
+        usersContent.getDeleteBtn().setOnAction(e -> {
+            UserRow selected = usersContent.getTable().getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                deleteUser(selected.username.get());
+            }
+        });
+        refreshUsersTable();
+    }
+
+    private void setupConfigContent() {
+        configContent.getPortField().setText(String.valueOf(config.getPort()));
+        configContent.getRootDirField().setText(config.getRootDirectory());
+        configContent.getMaxConnField().setText(String.valueOf(config.getMaxConnections()));
+
+        configContent.getBrowseBtn().setOnAction(e -> {
+            DirectoryChooser dirChooser = new DirectoryChooser();
+            dirChooser.setTitle("Select Root Directory");
+            File dir = dirChooser.showDialog(primaryStage);
+            if (dir != null) {
+                configContent.getRootDirField().setText(dir.getAbsolutePath());
+            }
+        });
+
+        configContent.getSaveBtn().setOnAction(e -> {
+            try {
+                config.setPort(Integer.parseInt(configContent.getPortField().getText()));
+                config.setRootDirectory(configContent.getRootDirField().getText());
+                config.setMaxConnections(Integer.parseInt(configContent.getMaxConnField().getText()));
+                config.save(CONFIG_PATH);
+                updateStats();
+                showSuccessMessage("Configuration saved successfully!");
+            } catch (Exception ex) {
+                showErrorMessage("Failed to save: " + ex.getMessage());
+            }
+        });
+    }
+
+    private void setupLogsContent() {
+        logger.addListener(entry -> Platform.runLater(() -> {
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            String line = String.format("[%s] [%s] %s%n",
+                    entry.timestamp.format(fmt), entry.level, entry.message);
+            logsContent.getLogsArea().appendText(line);
+        }));
+
+        logsContent.getClearBtn().setOnAction(e -> {
+            logger.clearLogs();
+            logsContent.getLogsArea().clear();
+        });
     }
 
     private void toggleServer() {
@@ -563,28 +316,30 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
                 ftpServer.start();
             }
         } catch (IOException e) {
-            showAlert("Error", e.getMessage());
+            showErrorMessage(e.getMessage());
         }
     }
 
     private void updateStats() {
         Platform.runLater(() -> {
-            statPortValue.setText(String.valueOf(config.getPort()));
-            int connCount = ftpServer != null ? ftpServer.getConnectionCount() : 0;
-            statConnectionsValue.setText(String.valueOf(connCount));
-            statMaxConnectionsValue.setText(String.valueOf(config.getMaxConnections()));
-            statUsersValue.setText(String.valueOf(userManager.getAllUsers().size()));
+            if (overviewContent != null) {
+                overviewContent.getStatPortValue().setText(String.valueOf(config.getPort()));
+                int connCount = ftpServer != null ? ftpServer.getConnectionCount() : 0;
+                overviewContent.getStatConnectionsValue().setText(String.valueOf(connCount));
+                overviewContent.getStatMaxConnectionsValue().setText(String.valueOf(config.getMaxConnections()));
+                overviewContent.getStatUsersValue().setText(String.valueOf(userManager.getAllUsers().size()));
+            }
             refreshClientsTable();
         });
     }
 
     private void refreshClientsTable() {
-        if (clientsData != null) {
-            clientsData.clear();
+        if (clientsContent != null && clientsContent.getClientsData() != null) {
+            clientsContent.getClientsData().clear();
             DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
             if (ftpServer != null) {
                 for (FtpServer.ClientSession session : ftpServer.getClientSessions()) {
-                    clientsData.add(new ClientRow(
+                    clientsContent.getClientsData().add(new ClientRow(
                             session.getClientAddress(),
                             String.valueOf(session.getClientPort()),
                             session.connectTime.format(fmt),
@@ -596,10 +351,10 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
     }
 
     private void refreshUsersTable() {
-        if (usersData != null) {
-            usersData.clear();
+        if (usersContent != null && usersContent.getUsersData() != null) {
+            usersContent.getUsersData().clear();
             for (User user : userManager.getAllUsers()) {
-                usersData.add(new UserRow(
+                usersContent.getUsersData().add(new UserRow(
                         user.getUsername(),
                         user.getHomeDirectory() != null ? user.getHomeDirectory() : "Default",
                         user.isEnabled() ? "Yes" : "No",
@@ -741,7 +496,49 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
         alert.setContentText(message);
         alert.getDialogPane().getStyleClass().add("alert");
         alert.getDialogPane().getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
+        
+        // 添加动画效果
+        alert.getDialogPane().getStyleClass().add("fade-in");
+        Platform.runLater(() -> {
+            alert.getDialogPane().getStyleClass().add("visible");
+        });
+        
         alert.showAndWait();
+    }
+    
+    private void showSuccessMessage(String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Success");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.getDialogPane().getStyleClass().add("alert");
+        alert.getDialogPane().getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
+        alert.showAndWait();
+    }
+    
+    private void showErrorMessage(String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Error");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.getDialogPane().getStyleClass().add("alert");
+        alert.getDialogPane().getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
+        alert.showAndWait();
+    }
+    
+    private void showConfirmationMessage(String title, String message, Runnable onConfirm) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.getDialogPane().getStyleClass().add("alert");
+        alert.getDialogPane().getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
+        
+        alert.showAndWait().ifPresent(response -> {
+            if (response == javafx.scene.control.ButtonType.OK) {
+                onConfirm.run();
+            }
+        });
     }
 
     private void cleanup() {
@@ -753,11 +550,11 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
     @Override
     public void onLogEntry(Logger.LogEntry entry) {
         Platform.runLater(() -> {
-            if (logTextArea != null) {
+            if (overviewContent != null && overviewContent.getLogTextArea() != null) {
                 DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
                 String line = String.format("[%s] [%s] %s%n",
                         entry.timestamp.format(fmt), entry.level, entry.message);
-                logTextArea.appendText(line);
+                overviewContent.getLogTextArea().appendText(line);
             }
         });
     }
@@ -772,157 +569,9 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
         updateStats();
     }
 
-    public static class ClientRow {
-        public final SimpleStringProperty ip;
-        public final SimpleStringProperty port;
-        public final SimpleStringProperty connectTime;
-        public final SimpleStringProperty status;
-
-        public ClientRow(String ip, String port, String connectTime, String status) {
-            this.ip = new SimpleStringProperty(ip);
-            this.port = new SimpleStringProperty(port);
-            this.connectTime = new SimpleStringProperty(connectTime);
-            this.status = new SimpleStringProperty(status);
-        }
-    }
-
-    public static class UserRow {
-        public final SimpleStringProperty username;
-        public final SimpleStringProperty homeDir;
-        public final SimpleStringProperty enabled;
-        public final SimpleStringProperty permissions;
-
-        public UserRow(String username, String homeDir, String enabled, String permissions) {
-            this.username = new SimpleStringProperty(username);
-            this.homeDir = new SimpleStringProperty(homeDir);
-            this.enabled = new SimpleStringProperty(enabled);
-            this.permissions = new SimpleStringProperty(permissions);
-        }
-    }
-
     private void initSystemTray() {
-        if (!java.awt.SystemTray.isSupported()) {
-            logger.info("System tray is not supported on this platform", "UI", "-");
-            return;
-        }
-
-        java.awt.EventQueue.invokeLater(() -> {
-            try {
-                systemTray = java.awt.SystemTray.getSystemTray();
-                java.awt.PopupMenu popup = new java.awt.PopupMenu();
-
-                java.awt.MenuItem showItem = new java.awt.MenuItem("Show Window");
-                showItem.addActionListener(new java.awt.event.ActionListener() {
-                    @Override
-                    public void actionPerformed(java.awt.event.ActionEvent e) {
-                        showFromTray();
-                    }
-                });
-
-                startStopTrayItem = new java.awt.MenuItem("Start Server");
-                startStopTrayItem.addActionListener(new java.awt.event.ActionListener() {
-                    @Override
-                    public void actionPerformed(java.awt.event.ActionEvent e) {
-                        toggleServerFromTray();
-                    }
-                });
-
-                java.awt.MenuItem exitItem = new java.awt.MenuItem("Exit");
-                exitItem.addActionListener(new java.awt.event.ActionListener() {
-                    @Override
-                    public void actionPerformed(java.awt.event.ActionEvent e) {
-                        exitApplication();
-                    }
-                });
-
-                popup.add(showItem);
-                popup.addSeparator();
-                popup.add(startStopTrayItem);
-                popup.addSeparator();
-                popup.add(exitItem);
-
-                java.awt.Image icon = createTrayIcon();
-                trayIcon = new java.awt.TrayIcon(icon, "FTP Server", popup);
-                trayIcon.setImageAutoSize(true);
-                trayIcon.addActionListener(new java.awt.event.ActionListener() {
-                    @Override
-                    public void actionPerformed(java.awt.event.ActionEvent e) {
-                        showFromTray();
-                    }
-                });
-
-                systemTray.add(trayIcon);
-                trayInitialized = true;
-                logger.info("System tray initialized", "UI", "-");
-            } catch (java.awt.AWTException e) {
-                logger.error("Failed to initialize system tray: " + e.getMessage(), "UI", "-");
-            }
-        });
-    }
-
-    private java.awt.Image createTrayIcon() {
-        int size = 16;
-        java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB);
-        java.awt.Graphics2D g2d = image.createGraphics();
-        g2d.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-        g2d.setColor(new java.awt.Color(76, 175, 80));
-        g2d.fillOval(0, 0, size, size);
-        g2d.setColor(java.awt.Color.WHITE);
-        g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 10));
-        java.awt.FontMetrics fm = g2d.getFontMetrics();
-        String text = "F";
-        int x = (size - fm.stringWidth(text)) / 2;
-        int y = (size - fm.getHeight()) / 2 + fm.getAscent();
-        g2d.drawString(text, x, y);
-        g2d.dispose();
-        return image;
-    }
-
-    private void hideToTray() {
-        Platform.runLater(() -> {
-            primaryStage.hide();
-        });
-        if (trayIcon != null) {
-            java.awt.EventQueue.invokeLater(() -> {
-                trayIcon.displayMessage("FTP Server", "Server is running in background", java.awt.TrayIcon.MessageType.INFO);
-            });
-        }
-    }
-
-    private void showFromTray() {
-        Platform.runLater(() -> {
-            primaryStage.show();
-            primaryStage.toFront();
-        });
-    }
-
-    private void toggleServerFromTray() {
-        Platform.runLater(() -> {
-            try {
-                toggleServer();
-            } catch (Exception e) {
-                    logger.error("Error toggling server from tray: " + e.getMessage(), "UI", "-");
-            }
-        });
-    }
-
-    private void exitApplication() {
-        Platform.runLater(() -> {
-            cleanup();
-            if (ftpServer.isRunning()) {
-                ftpServer.stop();
-            }
-            if (trayInitialized && systemTray != null) {
-                java.awt.EventQueue.invokeLater(() -> {
-                    systemTray.remove(trayIcon);
-                    Platform.exit();
-                    System.exit(0);
-                });
-            } else {
-                Platform.exit();
-                System.exit(0);
-            }
-        });
+        systemTrayManager = new SystemTrayManager(primaryStage, ftpServer, logger);
+        systemTrayManager.initSystemTray();
     }
 
     @Override
@@ -935,10 +584,9 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
             startStopButton.getStyleClass().remove("btn-primary");
             startStopButton.getStyleClass().add("btn-danger");
         });
-        if (trayInitialized && startStopTrayItem != null) {
-            java.awt.EventQueue.invokeLater(() -> {
-                startStopTrayItem.setLabel("Stop Server");
-            });
+        // 同步更新托盘状态，即使托盘尚未初始化也会保存状态
+        if (systemTrayManager != null) {
+            systemTrayManager.updateTrayServerStatus(true);
         }
     }
 
@@ -952,10 +600,9 @@ public class ModernMainWindow extends Application implements FtpServer.ServerLis
             startStopButton.getStyleClass().remove("btn-danger");
             startStopButton.getStyleClass().add("btn-primary");
         });
-        if (trayInitialized && startStopTrayItem != null) {
-            java.awt.EventQueue.invokeLater(() -> {
-                startStopTrayItem.setLabel("Start Server");
-            });
+        // 同步更新托盘状态，即使托盘尚未初始化也会保存状态
+        if (systemTrayManager != null) {
+            systemTrayManager.updateTrayServerStatus(false);
         }
     }
 }
