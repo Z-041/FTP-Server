@@ -13,6 +13,7 @@ public abstract class DataConnection implements AutoCloseable {
     protected InputStream inputStream;
     protected OutputStream outputStream;
     protected boolean asciiMode;
+    protected long restartOffset = 0;
     protected static final Logger logger = Logger.getInstance();
 
     /**
@@ -20,22 +21,39 @@ public abstract class DataConnection implements AutoCloseable {
      */
     public DataConnection() {
         this.asciiMode = false;
+        this.restartOffset = 0;
     }
 
     /**
-     * 设置ASCII模式
-     * @param asciiMode 是否使用ASCII模式
+     * 设置 ASCII 模式
+     * @param asciiMode 是否使用 ASCII 模式
      */
     public void setAsciiMode(boolean asciiMode) {
         this.asciiMode = asciiMode;
     }
 
     /**
-     * 获取当前是否为ASCII模式
-     * @return 是否为ASCII模式
+     * 获取当前是否为 ASCII 模式
+     * @return 是否为 ASCII 模式
      */
     public boolean isAsciiMode() {
         return asciiMode;
+    }
+
+    /**
+     * 设置断点续传位置
+     * @param offset 续传位置
+     */
+    public void setRestartOffset(long offset) {
+        this.restartOffset = offset;
+    }
+
+    /**
+     * 获取断点续传位置
+     * @return 续传位置
+     */
+    public long getRestartOffset() {
+        return restartOffset;
     }
 
     /**
@@ -113,6 +131,13 @@ public abstract class DataConnection implements AutoCloseable {
             long totalBytesSent = 0;
             long fileLength = file.length();
             
+            if (restartOffset > 0 && restartOffset < fileLength) {
+                fis.skip(restartOffset);
+                totalBytesSent = restartOffset;
+                logger.info("Resuming file transfer: " + file.getName() + " at offset " + restartOffset, "DataConnection", 
+                           socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null);
+            }
+            
             String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
             logger.info("Starting file transfer: " + file.getName() + " (" + fileLength + " bytes)", "DataConnection", ip);
 
@@ -123,7 +148,7 @@ public abstract class DataConnection implements AutoCloseable {
             os.flush();
 
             // 验证传输大小
-            if (totalBytesSent != fileLength) {
+            if (restartOffset == 0 && totalBytesSent != fileLength) {
                 logger.warn("File transfer incomplete: expected " + fileLength + " bytes, sent " + totalBytesSent, "DataConnection", ip);
                 throw new DataConnectionException("File transfer incomplete: expected " + fileLength + " bytes, sent " + totalBytesSent,
                                                 DataConnectionException.ErrorType.TRANSFER_ERROR);
@@ -152,21 +177,26 @@ public abstract class DataConnection implements AutoCloseable {
                 }
             }
             
-            try (FileOutputStream fos = new FileOutputStream(file);
+            boolean append = restartOffset > 0 && file.exists() && file.length() >= restartOffset;
+            try (FileOutputStream fos = new FileOutputStream(file, append);
                  InputStream is = getInputStream()) {
                 byte[] buffer = new byte[8192];
                 int bytesRead;
-                long totalBytesReceived = 0;
+                long totalBytesReceived = append ? restartOffset : 0;
                 
                 String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
-            logger.info("Starting file reception: " + file.getName(), "DataConnection", ip);
+                if (append) {
+                    logger.info("Resuming file reception: " + file.getName() + " at offset " + restartOffset, "DataConnection", ip);
+                } else {
+                    logger.info("Starting file reception: " + file.getName(), "DataConnection", ip);
+                }
 
-            while ((bytesRead = is.read(buffer)) != -1) {
-                fos.write(buffer, 0, bytesRead);
-                totalBytesReceived += bytesRead;
-            }
+                while ((bytesRead = is.read(buffer)) != -1) {
+                    fos.write(buffer, 0, bytesRead);
+                    totalBytesReceived += bytesRead;
+                }
 
-            logger.info("File reception completed: " + file.getName() + " (" + totalBytesReceived + " bytes)", "DataConnection", ip);
+                logger.info("File reception completed: " + file.getName() + " (" + totalBytesReceived + " bytes)", "DataConnection", ip);
             }
         } catch (IOException e) {
             String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;

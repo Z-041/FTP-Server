@@ -42,12 +42,21 @@ public class StorCommand implements FtpCommand {
                 return;
             }
         }
-        session.sendResponse("150 Opening " + (session.isAsciiMode() ? "ASCII" : "BINARY") + 
-                           " mode data connection for " + file.getName());
+        long restartOffset = session.getRestartOffset();
+        if (restartOffset > 0 && file.exists() && file.length() >= restartOffset) {
+            session.sendResponse("150 Opening " + (session.isAsciiMode() ? "ASCII" : "BINARY") + 
+                               " mode data connection for " + file.getName() + 
+                               " (resuming at " + restartOffset + ")");
+        } else {
+            session.sendResponse("150 Opening " + (session.isAsciiMode() ? "ASCII" : "BINARY") + 
+                               " mode data connection for " + file.getName());
+        }
+        
         DataConnection dc = null;
         try {
             dc = session.openDataConnection();
             dc.setAsciiMode(session.isAsciiMode());
+            dc.setRestartOffset(restartOffset);
             dc.receiveFile(file);
             dc.close();
             dc = null;
@@ -57,6 +66,7 @@ public class StorCommand implements FtpCommand {
             session.logError("STOR error", e);
             session.sendResponse("425 Can't open data connection");
         } finally {
+            session.clearRestartOffset();
             if (dc != null) {
                 try {
                     dc.close();

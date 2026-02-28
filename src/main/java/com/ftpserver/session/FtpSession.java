@@ -38,6 +38,7 @@ public class FtpSession implements AutoCloseable {
     private int activeModePort;
     private PassiveDataConnection passiveDataConnection;
     private String pendingUsername;
+    private long restartOffset = 0;
 
     public FtpSession(Socket controlSocket, ServerConfig config, UserManager userManager) throws IOException {
         this.controlSocket = controlSocket;
@@ -262,6 +263,18 @@ public class FtpSession implements AutoCloseable {
 
     public PathResolver getPathResolver() {
         return pathResolver;
+    }
+
+    public long getRestartOffset() {
+        return restartOffset;
+    }
+
+    public void setRestartOffset(long restartOffset) {
+        this.restartOffset = restartOffset;
+    }
+
+    public void clearRestartOffset() {
+        this.restartOffset = 0;
     }
 
     @Override
