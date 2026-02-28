@@ -88,13 +88,17 @@ public class ServerConfig {
                 case "dataPortRangeStart" -> {
                     int s = Integer.parseInt(value);
                     if (s > 0 && s <= 65535) {
-                        dataPortRangeStart = s;
+                        if (s <= dataPortRangeEnd) {
+                            dataPortRangeStart = s;
+                        }
                     }
                 }
                 case "dataPortRangeEnd" -> {
                     int e = Integer.parseInt(value);
                     if (e > 0 && e <= 65535) {
-                        dataPortRangeEnd = e;
+                        if (e >= dataPortRangeStart) {
+                            dataPortRangeEnd = e;
+                        }
                     }
                 }
                 case "enablePassiveMode" -> enablePassiveMode = Boolean.parseBoolean(value);
@@ -125,22 +129,44 @@ public class ServerConfig {
     }
 
     public int getPort() { return port; }
-    public void setPort(int port) { this.port = port; }
+    public void setPort(int port) { 
+        if (port > 0 && port <= 65535) {
+            this.port = port; 
+        }
+    }
 
     public String getRootDirectory() { return rootDirectory; }
     public void setRootDirectory(String rootDirectory) { this.rootDirectory = rootDirectory; }
 
     public int getMaxConnections() { return maxConnections; }
-    public void setMaxConnections(int maxConnections) { this.maxConnections = maxConnections; }
+    public void setMaxConnections(int maxConnections) { 
+        if (maxConnections > 0) {
+            this.maxConnections = maxConnections; 
+        }
+    }
 
     public int getConnectionTimeout() { return connectionTimeout; }
-    public void setConnectionTimeout(int connectionTimeout) { this.connectionTimeout = connectionTimeout; }
+    public void setConnectionTimeout(int connectionTimeout) { 
+        if (connectionTimeout >= 0) {
+            this.connectionTimeout = connectionTimeout; 
+        }
+    }
 
     public int getDataPortRangeStart() { return dataPortRangeStart; }
-    public void setDataPortRangeStart(int dataPortRangeStart) { this.dataPortRangeStart = dataPortRangeStart; }
+    public void setDataPortRangeStart(int dataPortRangeStart) { 
+        if (dataPortRangeStart > 0 && dataPortRangeStart <= 65535 && 
+            dataPortRangeStart <= dataPortRangeEnd) {
+            this.dataPortRangeStart = dataPortRangeStart; 
+        }
+    }
 
     public int getDataPortRangeEnd() { return dataPortRangeEnd; }
-    public void setDataPortRangeEnd(int dataPortRangeEnd) { this.dataPortRangeEnd = dataPortRangeEnd; }
+    public void setDataPortRangeEnd(int dataPortRangeEnd) { 
+        if (dataPortRangeEnd > 0 && dataPortRangeEnd <= 65535 && 
+            dataPortRangeEnd >= dataPortRangeStart) {
+            this.dataPortRangeEnd = dataPortRangeEnd; 
+        }
+    }
 
     public boolean isEnablePassiveMode() { return enablePassiveMode; }
     public void setEnablePassiveMode(boolean enablePassiveMode) { this.enablePassiveMode = enablePassiveMode; }

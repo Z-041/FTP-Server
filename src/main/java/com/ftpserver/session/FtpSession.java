@@ -14,9 +14,6 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -78,6 +75,10 @@ public class FtpSession implements AutoCloseable {
 
     public void logError(String message, Exception e) {
         logger.error(message + ": " + e.getMessage(), "FtpSession", clientIp);
+    }
+
+    public void logWarn(String message) {
+        logger.warn(message, "FtpSession", clientIp);
     }
 
     public String resolvePath(String path) {

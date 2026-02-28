@@ -48,6 +48,7 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
     private CardLayout cardLayout;
     private javax.swing.Timer updateTimer;
     private boolean logsContentInitialized = false;
+    private boolean configContentInitialized = false;
 
     public MainWindow() {
         loadConfig();
@@ -279,6 +280,11 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
         configContent.getPortField().setText(String.valueOf(config.getPort()));
         configContent.getRootDirField().setText(config.getRootDirectory());
         configContent.getMaxConnField().setText(String.valueOf(config.getMaxConnections()));
+
+        if (configContentInitialized) {
+            return;
+        }
+        configContentInitialized = true;
 
         configContent.getBrowseBtn().addActionListener(e -> {
             JFileChooser dirChooser = new JFileChooser();

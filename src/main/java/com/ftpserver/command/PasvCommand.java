@@ -18,8 +18,11 @@ public class PasvCommand implements FtpCommand {
                 serverAddr = InetAddress.getByName(session.getConfig().getPassiveAddress());
             } else {
                 serverAddr = session.getControlSocket().getLocalAddress();
-                if (serverAddr.isLoopbackAddress() || serverAddr.getAddress().length != 4) {
-                    serverAddr = InetAddress.getByName("127.0.0.1");
+                if (serverAddr.isLoopbackAddress()) {
+                    String localIp = java.net.InetAddress.getLocalHost().getHostAddress();
+                    if (!localIp.equals("127.0.0.1")) {
+                        serverAddr = InetAddress.getByName(localIp);
+                    }
                 }
             }
             byte[] addrBytes = serverAddr.getAddress();

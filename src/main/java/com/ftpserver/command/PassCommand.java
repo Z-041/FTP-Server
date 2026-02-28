@@ -4,7 +4,6 @@ import com.ftpserver.session.FtpSession;
 import com.ftpserver.user.User;
 
 import java.io.File;
-import java.util.Optional;
 
 public class PassCommand implements FtpCommand {
     @Override
@@ -14,16 +13,19 @@ public class PassCommand implements FtpCommand {
             return;
         }
         
-        Optional<User> userOpt;
+        User user;
         String pendingUsername = session.getPendingUsername();
         if (pendingUsername.equalsIgnoreCase("anonymous") || pendingUsername.equalsIgnoreCase("ftp")) {
-            userOpt = session.getUserManager().getUser("anonymous");
+            user = session.getUserManager().getUser("anonymous").orElse(null);
+            if (user != null && argument != null && !argument.isEmpty() && 
+                !argument.contains("@")) {
+                session.logWarn("Anonymous login with invalid email format");
+            }
         } else {
-            userOpt = session.getUserManager().authenticate(pendingUsername, argument);
+            user = session.getUserManager().authenticate(pendingUsername, argument).orElse(null);
         }
         
-        if (userOpt.isPresent() && userOpt.get().isEnabled()) {
-            User user = userOpt.get();
+        if (user != null && user.isEnabled()) {
             session.setCurrentUser(user);
             session.setAuthenticated(true);
             String userHome = user.getHomeDirectory();

@@ -156,9 +156,9 @@ public class UserManager {
 
     private boolean verifyPassword(String plainPassword, String storedPassword) {
         if (storedPassword == null || storedPassword.isEmpty()) {
-            return plainPassword == null || plainPassword.isEmpty();
+            return false;
         }
-        if (plainPassword == null) {
+        if (plainPassword == null || plainPassword.isEmpty()) {
             return false;
         }
         if (!isPasswordHashed(storedPassword)) {

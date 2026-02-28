@@ -138,12 +138,12 @@ public class PathResolver {
 
     /**
      * 检查路径是否安全（不包含路径遍历攻击）
-     * @param ftpPath FTP路径
+     * @param ftpPath FTP 路径
      * @return 是否安全
      */
     public boolean isPathSafe(String ftpPath) {
         if (ftpPath == null || ftpPath.isEmpty()) {
-            return false;
+            return true;
         }
         
         try {
@@ -157,25 +157,18 @@ public class PathResolver {
             normalized = removeDuplicateSlashes(normalized);
             
             List<String> validSegments = new ArrayList<>();
-            boolean triedToEscape = false;
             
             for (String segment : normalized.split("/")) {
                 if (segment == null || segment.isEmpty() || segment.equals(".")) {
                     continue;
                 }
                 if (segment.equals("..")) {
-                    if (validSegments.isEmpty()) {
-                        triedToEscape = true;
-                    } else {
+                    if (!validSegments.isEmpty()) {
                         validSegments.remove(validSegments.size() - 1);
                     }
                 } else {
                     validSegments.add(segment);
                 }
-            }
-            
-            if (triedToEscape) {
-                return false;
             }
             
             File rootDir = new File(rootDirectory);
