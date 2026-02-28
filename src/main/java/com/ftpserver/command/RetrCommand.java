@@ -5,6 +5,7 @@ import com.ftpserver.session.FtpSession;
 import com.ftpserver.user.User;
 
 import java.io.File;
+import java.io.IOException;
 
 public class RetrCommand implements FtpCommand {
     @Override
@@ -51,26 +52,20 @@ public class RetrCommand implements FtpCommand {
                                " mode data connection for " + file.getName());
         }
         
-        DataConnection dc = null;
-        try {
-            dc = session.openDataConnection();
+        try (DataConnection dc = session.openDataConnection()) {
             dc.setAsciiMode(session.isAsciiMode());
             dc.setRestartOffset(restartOffset);
             dc.sendFile(file);
-            dc.close();
-            dc = null;
             session.sendResponse("226 Transfer complete");
             session.logInfo("File downloaded: " + filePath);
-        } catch (Exception e) {
-            session.logError("RETR error", e);
+        } catch (com.ftpserver.data.DataConnectionException e) {
+            session.logError("RETR data connection error", e);
+            session.sendResponse("425 Can't open data connection");
+        } catch (IOException e) {
+            session.logError("RETR IO error", e);
             session.sendResponse("425 Can't open data connection");
         } finally {
             session.clearRestartOffset();
-            if (dc != null) {
-                try {
-                    dc.close();
-                } catch (Exception ignored) {}
-            }
         }
     }
 

@@ -21,9 +21,6 @@ public class RestCommand implements FtpCommand {
             session.sendResponse("350 Restarting at " + offset + ". Send STORE or RETRIEVE to initiate transfer");
         } catch (NumberFormatException e) {
             session.sendResponse("501 Invalid restart offset");
-        } catch (Exception e) {
-            session.logError("REST error", e);
-            session.sendResponse("451 Requested action aborted");
         }
     }
 

@@ -1,9 +1,9 @@
 package com.ftpserver.command;
 
-import com.ftpserver.data.DataConnection;
 import com.ftpserver.session.FtpSession;
 import com.ftpserver.user.User;
 import com.ftpserver.util.CrossPlatformUtil;
+import com.ftpserver.util.FileListUtils;
 
 import java.io.File;
 
@@ -21,7 +21,6 @@ public class ListCommand implements FtpCommand {
         }
         listPath = listPath.isEmpty() ? session.getCurrentDirectory() : session.resolvePath(listPath);
         
-        // 检查路径安全性
         if (!session.getPathResolver().isPathSafe(listPath)) {
             session.sendResponse("550 Path not allowed");
             return;
@@ -36,32 +35,13 @@ public class ListCommand implements FtpCommand {
             session.sendResponse("550 Not a directory");
             return;
         }
-        session.sendResponse("150 Opening ASCII mode data connection for file list");
-        DataConnection dc = null;
-        try {
-            dc = session.openDataConnection();
-            dc.setAsciiMode(session.isAsciiMode());
-            StringBuilder sb = new StringBuilder();
-            File[] files = dir.listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    sb.append(session.formatFileInfo(file)).append(CrossPlatformUtil.CRLF);
-                }
-            }
-            dc.sendListing(sb.toString());
-            dc.close();
-            dc = null;
-            session.sendResponse("226 Transfer complete");
-        } catch (Exception e) {
-            session.logError("LIST error", e);
-            session.sendResponse("425 Can't open data connection");
-        } finally {
-            if (dc != null) {
-                try {
-                    dc.close();
-                } catch (Exception ignored) {}
-            }
-        }
+        
+        FileListUtils.executeFileListOperation(
+            session, 
+            dir, 
+            file -> session.formatFileInfo(file),
+            "LIST"
+        );
     }
 
     @Override

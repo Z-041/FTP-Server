@@ -1,9 +1,8 @@
 package com.ftpserver.command;
 
-import com.ftpserver.data.DataConnection;
 import com.ftpserver.session.FtpSession;
 import com.ftpserver.user.User;
-import com.ftpserver.util.CrossPlatformUtil;
+import com.ftpserver.util.FileListUtils;
 
 import java.io.File;
 
@@ -35,32 +34,13 @@ public class MlsdCommand implements FtpCommand {
             session.sendResponse("550 Not a directory");
             return;
         }
-        session.sendResponse("150 Opening data connection for MLSD");
-        DataConnection dc = null;
-        try {
-            dc = session.openDataConnection();
-            dc.setAsciiMode(false);
-            StringBuilder sb = new StringBuilder();
-            File[] files = dir.listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    sb.append(session.formatMlsdEntry(file)).append(CrossPlatformUtil.CRLF);
-                }
-            }
-            dc.sendListing(sb.toString());
-            dc.close();
-            dc = null;
-            session.sendResponse("226 Transfer complete");
-        } catch (Exception e) {
-            session.logError("MLSD error", e);
-            session.sendResponse("425 Can't open data connection");
-        } finally {
-            if (dc != null) {
-                try {
-                    dc.close();
-                } catch (Exception ignored) {}
-            }
-        }
+        
+        FileListUtils.executeFileListOperation(
+            session, 
+            dir, 
+            file -> session.formatMlsdEntry(file),
+            "MLSD"
+        );
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.ftpserver.command;
 
 import com.ftpserver.session.FtpSession;
 
+import java.io.IOException;
 import java.net.InetAddress;
 
 public class EprtCommand implements FtpCommand {
@@ -45,8 +46,8 @@ public class EprtCommand implements FtpCommand {
             session.sendResponse("200 EPRT command successful");
         } catch (NumberFormatException e) {
             session.sendResponse("501 Invalid EPRT parameters");
-        } catch (Exception e) {
-            session.logError("EPRT error", e);
+        } catch (IOException e) {
+            session.logError("EPRT IO error", e);
             session.sendResponse("501 Syntax error in parameters");
         }
     }
