@@ -7,17 +7,17 @@ import java.awt.*;
 
 public class Main {
     public static void main(String[] args) {
-        // 设置系统外观
+        // Set system look and feel
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
             e.printStackTrace();
         }
 
-        // 设置全局字体，支持中文显示（在设置LookAndFeel之后）
+        // Set global font for Chinese support (after setting LookAndFeel)
         setGlobalFont();
 
-        // 在事件调度线程中启动 GUI
+        // Launch GUI on Event Dispatch Thread
         SwingUtilities.invokeLater(() -> {
             MainWindow window = new MainWindow();
             window.setVisible(true);
@@ -25,95 +25,61 @@ public class Main {
     }
 
     private static void setGlobalFont() {
-        // 使用支持中文的字体
-        String fontName = "Microsoft YaHei";
-        // 如果微软雅黑不可用，尝试其他中文字体
-        if (!isFontAvailable(fontName)) {
-            fontName = "SimHei";  // 黑体
-            if (!isFontAvailable(fontName)) {
-                fontName = "SimSun";  // 宋体
-                if (!isFontAvailable(fontName)) {
-                    fontName = "Dialog";  // 系统默认对话框字体
-                }
-            }
-        }
+        // Get system font for cross-platform compatibility
+        Font systemFont = getSystemFont();
+        Font defaultFont = systemFont.deriveFont(Font.PLAIN, 12);
+        Font boldFont = systemFont.deriveFont(Font.BOLD, 12);
 
-        Font defaultFont = new Font(fontName, Font.PLAIN, 12);
-        Font boldFont = new Font(fontName, Font.BOLD, 12);
-
-        // 设置所有可能的字体键
         String[] fontKeys = {
-            "Label.font",
-            "Button.font",
-            "ToggleButton.font",
-            "RadioButton.font",
-            "CheckBox.font",
-            "ComboBox.font",
-            "TextField.font",
-            "TextArea.font",
-            "TextPane.font",
-            "EditorPane.font",
-            "FormattedTextField.font",
-            "List.font",
-            "Tree.font",
-            "Table.font",
-            "TableHeader.font",
-            "Menu.font",
-            "MenuItem.font",
-            "PopupMenu.font",
-            "OptionPane.font",
-            "Panel.font",
-            "ProgressBar.font",
-            "ScrollPane.font",
-            "Slider.font",
-            "Spinner.font",
-            "TabbedPane.font",
-            "TitledBorder.font",
-            "ToolBar.font",
-            "ToolTip.font",
-            "Viewport.font",
-            "InternalFrame.titleFont",
-            "DesktopIcon.font",
-            "ColorChooser.font",
-            "FileChooser.listFont",
-            "FileChooser.detailsViewFont"
+            "Label.font", "Button.font", "ToggleButton.font", "RadioButton.font",
+            "CheckBox.font", "ComboBox.font", "TextField.font", "TextArea.font",
+            "TextPane.font", "EditorPane.font", "FormattedTextField.font", "List.font",
+            "Tree.font", "Table.font", "TableHeader.font", "Menu.font", "MenuItem.font",
+            "PopupMenu.font", "OptionPane.font", "Panel.font", "ProgressBar.font",
+            "ScrollPane.font", "Slider.font", "Spinner.font", "TabbedPane.font",
+            "TitledBorder.font", "ToolBar.font", "ToolTip.font", "Viewport.font",
+            "InternalFrame.titleFont", "DesktopIcon.font", "ColorChooser.font",
+            "FileChooser.listFont", "FileChooser.detailsViewFont"
         };
 
         for (String key : fontKeys) {
             Font oldFont = UIManager.getFont(key);
             if (oldFont != null) {
-                Font newFont = new Font(fontName, oldFont.getStyle(), oldFont.getSize());
+                Font newFont = systemFont.deriveFont(oldFont.getStyle(), oldFont.getSize());
                 UIManager.put(key, newFont);
             } else {
                 UIManager.put(key, defaultFont);
             }
         }
 
-        // 特别设置表头字体为粗体
         UIManager.put("TableHeader.font", boldFont);
-
-        // 遍历所有默认值，替换所有字体
-        java.util.Enumeration<Object> keys = UIManager.getDefaults().keys();
-        while (keys.hasMoreElements()) {
-            Object key = keys.nextElement();
-            Object value = UIManager.get(key);
-            if (value instanceof Font) {
-                Font oldFont = (Font) value;
-                // 保留原有样式和大小
-                Font newFont = new Font(fontName, oldFont.getStyle(), oldFont.getSize());
-                UIManager.put(key, newFont);
-            }
-        }
     }
 
-    private static boolean isFontAvailable(String fontName) {
+    private static Font getSystemFont() {
+        // Try to use system fonts with Chinese support, in priority order
+        String[] preferredFonts = {
+            "Microsoft YaHei",     // Windows
+            "PingFang SC",         // macOS
+            "Hiragino Sans GB",    // macOS
+            "Noto Sans CJK SC",    // Linux
+            "WenQuanYi Micro Hei", // Linux
+            "SimHei",              // Windows
+            "SimSun",              // Windows
+            "Dialog"               // System default
+        };
+
         GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
         String[] availableFonts = ge.getAvailableFontFamilyNames();
-        for (String font : availableFonts) {
-            if (font.equalsIgnoreCase(fontName)) {
-                return true;
+
+        for (String preferred : preferredFonts) {
+            for (String available : availableFonts) {
+                if (available.equalsIgnoreCase(preferred)) {
+                    return new Font(preferred, Font.PLAIN, 12);
+                }
             }
         }
-        return false;
+
+        // Fallback to system default font
+        return new Font(Font.DIALOG, Font.PLAIN, 12);
     }
 }

@@ -5,7 +5,6 @@ import com.ftpserver.ui.model.ClientRow;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.util.Vector;
 
 public class ClientsContent extends JPanel {
 
@@ -39,6 +38,9 @@ public class ClientsContent extends JPanel {
         table.getTableHeader().setBackground(new Color(248, 250, 252));
         table.getTableHeader().setForeground(new Color(71, 85, 105));
         table.getTableHeader().setPreferredSize(new Dimension(0, 38));
+        table.setAutoCreateRowSorter(false);
+        table.setDoubleBuffered(true);
+        table.setFillsViewportHeight(true);
 
         JScrollPane scrollPane = new JScrollPane(table);
         scrollPane.setBorder(BorderFactory.createLineBorder(new Color(226, 232, 240)));
@@ -52,11 +54,7 @@ public class ClientsContent extends JPanel {
     }
 
     public void addClient(ClientRow client) {
-        Vector<String> row = new Vector<>();
-        row.add(client.ip);
-        row.add(client.port);
-        row.add(client.connectTime);
-        row.add(client.status);
+        Object[] row = {client.ip, client.port, client.connectTime, client.status};
         tableModel.addRow(row);
     }
 

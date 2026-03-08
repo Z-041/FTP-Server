@@ -29,6 +29,7 @@ public class LogsContent extends JPanel {
         logsArea.setLineWrap(true);
         logsArea.setWrapStyleWord(true);
         logsArea.setBorder(new EmptyBorder(12, 12, 12, 12));
+        logsArea.setDoubleBuffered(true);
 
         JScrollPane scrollPane = new JScrollPane(logsArea);
         scrollPane.setBorder(BorderFactory.createLineBorder(new Color(226, 232, 240)));

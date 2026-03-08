@@ -6,7 +6,6 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.util.Vector;
 
 public class UsersContent extends JPanel {
 
@@ -85,6 +84,9 @@ public class UsersContent extends JPanel {
         table.getTableHeader().setBackground(new Color(248, 250, 252));
         table.getTableHeader().setForeground(new Color(71, 85, 105));
         table.getTableHeader().setPreferredSize(new Dimension(0, 38));
+        table.setAutoCreateRowSorter(false);
+        table.setDoubleBuffered(true);
+        table.setFillsViewportHeight(true);
 
         return table;
     }
@@ -94,11 +96,7 @@ public class UsersContent extends JPanel {
     }
 
     public void addUser(UserRow user) {
-        Vector<String> row = new Vector<>();
-        row.add(user.username);
-        row.add(user.homeDir);
-        row.add(user.enabled);
-        row.add(user.permissions);
+        Object[] row = {user.username, user.homeDir, user.enabled, user.permissions};
         tableModel.addRow(row);
     }
 

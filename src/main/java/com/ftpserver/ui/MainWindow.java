@@ -49,6 +49,22 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
     private javax.swing.Timer updateTimer;
     private boolean logsContentInitialized = false;
     private boolean configContentInitialized = false;
+    
+    private int lastConnectionCount = -1;
+    private int lastUserCount = -1;
+    private DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private java.util.List<FtpServer.ClientSession> lastSessions = new java.util.ArrayList<>();
+    private int overviewLogLineCount = 0;
+    private static final int MAX_OVERVIEW_LOG_LINES = 50;
+    
+    // 批量日志更新
+    private final StringBuilder logBatchBuffer = new StringBuilder(4096);
+    private javax.swing.Timer logBatchTimer;
+    private static final int LOG_BATCH_INTERVAL = 100; // 100ms批量更新一次
+    private final Object logBufferLock = new Object();
+    
+    // 用户数据缓存
+    private java.util.List<User> lastUsers = new java.util.ArrayList<>();
 
     public MainWindow() {
         loadConfig();
@@ -72,34 +88,67 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
 
         // 设置GUI日志监听器
         setupGUILogListener();
+        initLogBatchTimer();
+    }
+
+    private void initLogBatchTimer() {
+        logBatchTimer = new javax.swing.Timer(LOG_BATCH_INTERVAL, e -> flushLogBatch());
+        logBatchTimer.setRepeats(true);
+        logBatchTimer.start();
+    }
+
+    private void flushLogBatch() {
+        synchronized (logBufferLock) {
+            if (logBatchBuffer.length() > 0) {
+                String batch = logBatchBuffer.toString();
+                logBatchBuffer.setLength(0);
+                
+                SwingUtilities.invokeLater(() -> {
+                    // 批量更新日志页面
+                    logsContent.appendLog(batch);
+
+                    // 批量更新概览页面的最近活动区域
+                    JTextArea overviewLogArea = overviewContent.getLogTextArea();
+                    overviewLogArea.append(batch);
+                    overviewLogArea.setCaretPosition(overviewLogArea.getDocument().getLength());
+                    
+                    // 计算新增行数并限制显示
+                    int newLines = countNewLines(batch);
+                    overviewLogLineCount += newLines;
+                    
+                    if (overviewLogLineCount > MAX_OVERVIEW_LOG_LINES) {
+                        try {
+                            int linesToRemove = overviewLogLineCount - MAX_OVERVIEW_LOG_LINES;
+                            int end = overviewLogArea.getLineStartOffset(0);
+                            int start = overviewLogArea.getLineStartOffset(linesToRemove);
+                            overviewLogArea.replaceRange("", end, start);
+                            overviewLogLineCount = MAX_OVERVIEW_LOG_LINES;
+                        } catch (Exception ex) {
+                            // 忽略文档操作异常
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    private int countNewLines(String text) {
+        int count = 0;
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) == '\n') count++;
+        }
+        return count;
     }
 
     private void setupGUILogListener() {
-        logger.addListener(entry -> SwingUtilities.invokeLater(() -> {
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        logger.addListener(entry -> {
             String line = String.format("[%s] [%s] %s%n",
-                    entry.timestamp.format(fmt), entry.level, entry.message);
-
-            // 更新日志页面
-            logsContent.appendLog(line);
-
-            // 同步更新概览页面的最近活动区域
-            JTextArea overviewLogArea = overviewContent.getLogTextArea();
-            overviewLogArea.append(line);
-            overviewLogArea.setCaretPosition(overviewLogArea.getDocument().getLength());
-
-            // 限制最近活动区域只显示最近50条日志，防止内存无限增长
-            try {
-                int lines = overviewLogArea.getLineCount();
-                if (lines > 50) {
-                    int end = overviewLogArea.getLineStartOffset(0);
-                    int start = overviewLogArea.getLineStartOffset(lines - 50);
-                    overviewLogArea.replaceRange("", end, start);
-                }
-            } catch (Exception ex) {
-                // 忽略文档操作异常
+                    entry.timestamp.format(dateTimeFormatter), entry.level, entry.message);
+            
+            synchronized (logBufferLock) {
+                logBatchBuffer.append(line);
             }
-        }));
+        });
     }
 
     private void setupServer() {
@@ -108,7 +157,8 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
     }
 
     private void startUpdateTimer() {
-        updateTimer = new javax.swing.Timer(2000, e -> updateStats());
+        updateTimer = new javax.swing.Timer(3000, e -> updateStats());
+        updateTimer.setRepeats(true);
         updateTimer.start();
     }
 
@@ -277,9 +327,20 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
     }
 
     private void setupConfigContent() {
-        configContent.getPortField().setText(String.valueOf(config.getPort()));
-        configContent.getRootDirField().setText(config.getRootDirectory());
-        configContent.getMaxConnField().setText(String.valueOf(config.getMaxConnections()));
+        // 懒加载：只在配置值变化时更新UI
+        String currentPort = String.valueOf(config.getPort());
+        String currentRootDir = config.getRootDirectory();
+        String currentMaxConn = String.valueOf(config.getMaxConnections());
+        
+        if (!currentPort.equals(configContent.getPortField().getText())) {
+            configContent.getPortField().setText(currentPort);
+        }
+        if (!currentRootDir.equals(configContent.getRootDirField().getText())) {
+            configContent.getRootDirField().setText(currentRootDir);
+        }
+        if (!currentMaxConn.equals(configContent.getMaxConnField().getText())) {
+            configContent.getMaxConnField().setText(currentMaxConn);
+        }
 
         if (configContentInitialized) {
             return;
@@ -335,45 +396,93 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
     }
 
     private void updateStats() {
-        SwingUtilities.invokeLater(() -> {
-            overviewContent.getStatPortValue().setText(String.valueOf(config.getPort()));
-            int connCount = ftpServer != null ? ftpServer.getConnectionCount() : 0;
-            overviewContent.getStatConnectionsValue().setText(String.valueOf(connCount));
-            overviewContent.getStatMaxConnectionsValue().setText(String.valueOf(config.getMaxConnections()));
-            overviewContent.getStatUsersValue().setText(String.valueOf(userManager.getAllUsers().size()));
-        });
+        int connCount = ftpServer != null ? ftpServer.getConnectionCount() : 0;
+        int userCount = userManager.getAllUsers().size();
+        
+        boolean needsUpdate = connCount != lastConnectionCount || userCount != lastUserCount;
+        
+        if (needsUpdate) {
+            lastConnectionCount = connCount;
+            lastUserCount = userCount;
+            
+            SwingUtilities.invokeLater(() -> {
+                overviewContent.getStatPortValue().setText(String.valueOf(config.getPort()));
+                overviewContent.getStatConnectionsValue().setText(String.valueOf(connCount));
+                overviewContent.getStatMaxConnectionsValue().setText(String.valueOf(config.getMaxConnections()));
+                overviewContent.getStatUsersValue().setText(String.valueOf(userCount));
+            });
+        }
+        
         refreshClientsTable();
     }
 
     private void refreshClientsTable() {
-        SwingUtilities.invokeLater(() -> {
-            clientsContent.clearData();
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-            if (ftpServer != null) {
-                for (FtpServer.ClientSession session : ftpServer.getClientSessions()) {
+        java.util.List<FtpServer.ClientSession> currentSessions = ftpServer != null ? 
+            new java.util.ArrayList<>(ftpServer.getClientSessions()) : new java.util.ArrayList<>();
+        
+        boolean sessionsChanged = currentSessions.size() != lastSessions.size();
+        if (!sessionsChanged) {
+            for (int i = 0; i < currentSessions.size(); i++) {
+                FtpServer.ClientSession current = currentSessions.get(i);
+                FtpServer.ClientSession last = lastSessions.get(i);
+                if (!current.getClientAddress().equals(last.getClientAddress()) ||
+                    current.getClientPort() != last.getClientPort() ||
+                    current.active != last.active) {
+                    sessionsChanged = true;
+                    break;
+                }
+            }
+        }
+        
+        if (sessionsChanged) {
+            lastSessions = currentSessions;
+            SwingUtilities.invokeLater(() -> {
+                clientsContent.clearData();
+                for (FtpServer.ClientSession session : currentSessions) {
                     clientsContent.addClient(new ClientRow(
                             session.getClientAddress(),
                             String.valueOf(session.getClientPort()),
-                            session.connectTime.format(fmt),
+                            session.connectTime.format(dateTimeFormatter),
                             session.active ? "Active" : "Idle"
                     ));
                 }
-            }
-        });
+            });
+        }
     }
 
     private void refreshUsersTable() {
-        SwingUtilities.invokeLater(() -> {
-            usersContent.clearData();
-            for (User user : userManager.getAllUsers()) {
-                usersContent.addUser(new UserRow(
-                        user.getUsername(),
-                        user.getHomeDirectory() != null ? user.getHomeDirectory() : "Default",
-                        user.isEnabled() ? "Yes" : "No",
-                        user.getPermissions().toString()
-                ));
+        java.util.List<User> currentUsers = new java.util.ArrayList<>(userManager.getAllUsers());
+        
+        // 检查用户数据是否变化
+        boolean usersChanged = currentUsers.size() != lastUsers.size();
+        if (!usersChanged) {
+            for (int i = 0; i < currentUsers.size(); i++) {
+                User current = currentUsers.get(i);
+                User last = lastUsers.get(i);
+                if (!current.getUsername().equals(last.getUsername()) ||
+                    !java.util.Objects.equals(current.getHomeDirectory(), last.getHomeDirectory()) ||
+                    current.isEnabled() != last.isEnabled() ||
+                    !current.getPermissions().equals(last.getPermissions())) {
+                    usersChanged = true;
+                    break;
+                }
             }
-        });
+        }
+        
+        if (usersChanged) {
+            lastUsers = currentUsers;
+            SwingUtilities.invokeLater(() -> {
+                usersContent.clearData();
+                for (User user : currentUsers) {
+                    usersContent.addUser(new UserRow(
+                            user.getUsername(),
+                            user.getHomeDirectory() != null ? user.getHomeDirectory() : "Default",
+                            user.isEnabled() ? "Yes" : "No",
+                            user.getPermissions().toString()
+                    ));
+                }
+            });
+        }
     }
 
     private void showAddUserDialog() {
