@@ -3,6 +3,7 @@ package com.ftpserver.command;
 import com.ftpserver.config.ServerConfig;
 import com.ftpserver.session.FtpSession;
 import com.ftpserver.user.UserManager;
+import com.ftpserver.util.CommandValidator;
 import com.ftpserver.util.Logger;
 
 import java.io.IOException;
@@ -56,6 +57,12 @@ public class CommandHandler {
                 int spaceIndex = line.indexOf(' ');
                 String command = (spaceIndex > 0 ? line.substring(0, spaceIndex) : line).toUpperCase();
                 String argument = spaceIndex > 0 ? line.substring(spaceIndex + 1).trim() : "";
+
+                if (!CommandValidator.isArgumentSafe(argument)) {
+                    session.sendResponse("553 Invalid argument");
+                    logger.warn("Rejected unsafe argument from " + clientIp + ": " + argument, "CommandHandler", clientIp);
+                    continue;
+                }
 
                 // 执行命令并跟踪状态
                 CommandStatus status = executeCommandWithStatus(command, argument);

@@ -4,6 +4,8 @@ import com.ftpserver.util.Logger;
 
 import java.io.*;
 import java.net.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 
 /**
  * 数据连接抽象类，处理FTP数据传输
@@ -110,6 +112,8 @@ public abstract class DataConnection implements AutoCloseable {
         }
     }
 
+    private static final int BUFFER_SIZE = 65536;
+    
     /**
      * 发送文件
      * @param file 要发送的文件
@@ -124,30 +128,56 @@ public abstract class DataConnection implements AutoCloseable {
             throw new DataConnectionException("Cannot read file", DataConnectionException.ErrorType.RESOURCE_ERROR);
         }
         
-        try (FileInputStream fis = new FileInputStream(file);
-             OutputStream os = getOutputStream()) {
-            byte[] buffer = new byte[8192];
-            int bytesRead;
-            long totalBytesSent = 0;
-            long fileLength = file.length();
-            
+        String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
+        long fileLength = file.length();
+        long totalBytesSent = 0;
+        
+        try {
             if (restartOffset > 0 && restartOffset < fileLength) {
-                fis.skip(restartOffset);
                 totalBytesSent = restartOffset;
-                logger.info("Resuming file transfer: " + file.getName() + " at offset " + restartOffset, "DataConnection", 
-                           socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null);
+                logger.info("Resuming file transfer: " + file.getName() + " at offset " + restartOffset, "DataConnection", ip);
             }
             
-            String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
             logger.info("Starting file transfer: " + file.getName() + " (" + fileLength + " bytes)", "DataConnection", ip);
 
-            while ((bytesRead = fis.read(buffer)) != -1) {
-                os.write(buffer, 0, bytesRead);
-                totalBytesSent += bytesRead;
+            if (asciiMode) {
+                try (FileInputStream fis = new FileInputStream(file);
+                     OutputStream os = getOutputStream()) {
+                    if (restartOffset > 0 && restartOffset < fileLength) {
+                        fis.skip(restartOffset);
+                    }
+                    
+                    byte[] buffer = new byte[BUFFER_SIZE];
+                    int bytesRead;
+                    
+                    while ((bytesRead = fis.read(buffer)) != -1) {
+                        os.write(buffer, 0, bytesRead);
+                        totalBytesSent += bytesRead;
+                    }
+                    os.flush();
+                }
+            } else {
+                try (FileChannel fileChannel = FileChannel.open(file.toPath(), java.nio.file.StandardOpenOption.READ);
+                     OutputStream os = getOutputStream()) {
+                    
+                    if (restartOffset > 0 && restartOffset < fileLength) {
+                        fileChannel.position(restartOffset);
+                    }
+                    
+                    ByteBuffer buffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
+                    
+                    while (fileChannel.read(buffer) != -1) {
+                        buffer.flip();
+                        byte[] byteArray = new byte[buffer.remaining()];
+                        buffer.get(byteArray);
+                        os.write(byteArray);
+                        totalBytesSent += buffer.position();
+                        buffer.clear();
+                    }
+                    os.flush();
+                }
             }
-            os.flush();
 
-            // 验证传输大小
             if (restartOffset == 0 && totalBytesSent != fileLength) {
                 logger.warn("File transfer incomplete: expected " + fileLength + " bytes, sent " + totalBytesSent, "DataConnection", ip);
                 throw new DataConnectionException("File transfer incomplete: expected " + fileLength + " bytes, sent " + totalBytesSent,
@@ -156,7 +186,6 @@ public abstract class DataConnection implements AutoCloseable {
 
             logger.info("File transfer completed: " + file.getName() + " (" + totalBytesSent + " bytes)", "DataConnection", ip);
         } catch (IOException e) {
-            String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
             logger.error("File transfer failed: " + e.getMessage(), "DataConnection", ip);
             throw new DataConnectionException("File transfer failed", DataConnectionException.ErrorType.TRANSFER_ERROR, e);
         }
@@ -168,8 +197,9 @@ public abstract class DataConnection implements AutoCloseable {
      * @throws DataConnectionException 数据连接异常
      */
     public void receiveFile(File file) throws DataConnectionException {
+        String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
+        
         try {
-            // 确保父目录存在
             File parentDir = file.getParentFile();
             if (parentDir != null && !parentDir.exists()) {
                 if (!parentDir.mkdirs()) {
@@ -178,28 +208,54 @@ public abstract class DataConnection implements AutoCloseable {
             }
             
             boolean append = restartOffset > 0 && file.exists() && file.length() >= restartOffset;
-            try (FileOutputStream fos = new FileOutputStream(file, append);
-                 InputStream is = getInputStream()) {
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                long totalBytesReceived = append ? restartOffset : 0;
-                
-                String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
-                if (append) {
-                    logger.info("Resuming file reception: " + file.getName() + " at offset " + restartOffset, "DataConnection", ip);
-                } else {
-                    logger.info("Starting file reception: " + file.getName(), "DataConnection", ip);
-                }
-
-                while ((bytesRead = is.read(buffer)) != -1) {
-                    fos.write(buffer, 0, bytesRead);
-                    totalBytesReceived += bytesRead;
-                }
-
-                logger.info("File reception completed: " + file.getName() + " (" + totalBytesReceived + " bytes)", "DataConnection", ip);
+            long totalBytesReceived = append ? restartOffset : 0;
+            
+            if (append) {
+                logger.info("Resuming file reception: " + file.getName() + " at offset " + restartOffset, "DataConnection", ip);
+            } else {
+                logger.info("Starting file reception: " + file.getName(), "DataConnection", ip);
             }
+
+            if (asciiMode) {
+                try (FileOutputStream fos = new FileOutputStream(file, append);
+                     InputStream is = getInputStream()) {
+                    byte[] buffer = new byte[BUFFER_SIZE];
+                    int bytesRead;
+                    
+                    while ((bytesRead = is.read(buffer)) != -1) {
+                        fos.write(buffer, 0, bytesRead);
+                        totalBytesReceived += bytesRead;
+                    }
+                }
+            } else {
+                try (FileChannel fileChannel = FileChannel.open(file.toPath(), 
+                         java.nio.file.StandardOpenOption.CREATE,
+                         java.nio.file.StandardOpenOption.WRITE);
+                     InputStream is = getInputStream()) {
+                    
+                    if (append && restartOffset > 0) {
+                        fileChannel.position(restartOffset);
+                    }
+                    
+                    ByteBuffer buffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
+                    byte[] byteArray = new byte[BUFFER_SIZE];
+                    int bytesRead;
+                    
+                    while ((bytesRead = is.read(byteArray)) != -1) {
+                        buffer.clear();
+                        buffer.put(byteArray, 0, bytesRead);
+                        buffer.flip();
+                        
+                        while (buffer.hasRemaining()) {
+                            fileChannel.write(buffer);
+                        }
+                        totalBytesReceived += bytesRead;
+                    }
+                }
+            }
+
+            logger.info("File reception completed: " + file.getName() + " (" + totalBytesReceived + " bytes)", "DataConnection", ip);
         } catch (IOException e) {
-            String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
             logger.error("File reception failed: " + e.getMessage(), "DataConnection", ip);
             throw new DataConnectionException("File reception failed", DataConnectionException.ErrorType.TRANSFER_ERROR, e);
         }

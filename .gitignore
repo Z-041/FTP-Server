@@ -24,6 +24,7 @@ replay_pid*
 
 # IDE
 .idea/
+.trae/
 *.iws
 *.iml
 *.ipr

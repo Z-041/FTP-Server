@@ -62,6 +62,9 @@ public class UserManager {
             anonymous.setEnabled(true);
             anonymous.addPermission(User.Permission.READ);
             anonymous.addPermission(User.Permission.LIST);
+            anonymous.removePermission(User.Permission.WRITE);
+            anonymous.removePermission(User.Permission.DELETE);
+            anonymous.removePermission(User.Permission.CREATE_DIR);
             users.add(0, anonymous);
             saveUsers();
         }

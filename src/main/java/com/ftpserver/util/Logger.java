@@ -103,6 +103,28 @@ public class Logger {
             writeToFile(entry);
         }
     }
+    
+    /**
+     * 对 IP 地址进行脱敏处理
+     * @param ip 原始 IP 地址
+     * @return 脱敏后的 IP 地址
+     */
+    private String maskIpAddress(String ip) {
+        if (ip == null || ip.isEmpty()) {
+            return "-";
+        }
+        
+        if ("127.0.0.1".equals(ip) || "0:0:0:0:0:0:0:1".equals(ip)) {
+            return "localhost";
+        }
+        
+        String[] parts = ip.split("\\.");
+        if (parts.length == 4) {
+            return parts[0] + "." + parts[1] + "." + parts[2] + ".*";
+        }
+        
+        return ip.substring(0, Math.min(ip.length(), 8)) + "***";
+    }
 
     private void writeToFile(LogEntry entry) {
         try {
@@ -115,10 +137,11 @@ public class Logger {
                 rotateLogFile(logFile);
             }
             
+            String maskedIp = maskIpAddress(entry.ip);
             String formattedEntry = String.format("[%s] [%s] [%s] %s%n",
                     entry.timestamp.format(TIMESTAMP_FORMATTER),
                     entry.level,
-                    entry.ip != null ? entry.ip : "-",
+                    maskedIp,
                     entry.message);
             
             Files.write(logFile, formattedEntry.getBytes("UTF-8"),

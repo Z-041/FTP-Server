@@ -97,15 +97,29 @@ public class FtpServer {
                 logger.info("Root directory created: " + rootDir.getAbsolutePath(), "FtpServer", "-");
             }
         }
-        // 使用有界线程池，最大线程数为最大连接数的2倍
-        int maxThreads = Math.max(config.getMaxConnections() * 2, 10);
+        int maxThreads = Math.max(config.getMaxConnections() * 2, 20);
+        int coreThreads = Math.max(config.getMaxConnections(), 10);
+        int queueCapacity = Math.max(config.getMaxConnections() * 2, 100);
+        
         threadPool = new java.util.concurrent.ThreadPoolExecutor(
-            5, // 核心线程数
-            maxThreads, // 最大线程数
-            60L, TimeUnit.SECONDS, // 线程空闲时间
-            new java.util.concurrent.LinkedBlockingQueue<>(config.getMaxConnections()), // 工作队列
-            new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy() // 拒绝策略
+            coreThreads,
+            maxThreads,
+            60L, TimeUnit.SECONDS,
+            new java.util.concurrent.LinkedBlockingQueue<>(queueCapacity),
+            new java.util.concurrent.ThreadFactory() {
+                private int count = 0;
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r);
+                    t.setName("FTP-Worker-" + (++count));
+                    t.setDaemon(true);
+                    return t;
+                }
+            },
+            new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy()
         );
+        
+        ((java.util.concurrent.ThreadPoolExecutor) threadPool).prestartCoreThread();
         // 创建服务器套接字并开始监听
         serverSocket = new ServerSocket(config.getPort());
         serverSocket.setSoTimeout(5000);
