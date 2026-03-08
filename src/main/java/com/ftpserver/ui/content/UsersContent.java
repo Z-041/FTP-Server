@@ -105,6 +105,19 @@ public class UsersContent extends JPanel {
         Object[] row = {user.username, user.homeDir, user.enabled, user.permissions};
         tableModel.addRow(row);
     }
+    
+    /**
+     * 批量更新数据，提高性能
+     * @param users 用户列表
+     */
+    public void updateData(java.util.List<UserRow> users) {
+        // 批量更新，先清空再添加所有行
+        tableModel.setRowCount(0);
+        for (UserRow user : users) {
+            Object[] row = {user.username, user.homeDir, user.enabled, user.permissions};
+            tableModel.addRow(row);
+        }
+    }
 
     public UserRow getSelectedUser() {
         int row = table.getSelectedRow();

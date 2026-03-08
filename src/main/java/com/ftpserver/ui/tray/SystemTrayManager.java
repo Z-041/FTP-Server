@@ -176,6 +176,9 @@ public class SystemTrayManager {
         if (ftpServer.isRunning()) {
             ftpServer.stop();
         }
+        if (logger != null) {
+            logger.shutdown();
+        }
         if (trayInitialized && systemTray != null) {
             systemTray.remove(trayIcon);
         }

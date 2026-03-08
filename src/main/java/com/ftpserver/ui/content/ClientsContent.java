@@ -62,6 +62,19 @@ public class ClientsContent extends JPanel {
         Object[] row = {client.ip, client.port, client.connectTime, client.status};
         tableModel.addRow(row);
     }
+    
+    /**
+     * 批量更新数据，提高性能
+     * @param clients 客户端列表
+     */
+    public void updateData(java.util.List<ClientRow> clients) {
+        // 批量更新，先清空再添加所有行
+        tableModel.setRowCount(0);
+        for (ClientRow client : clients) {
+            Object[] row = {client.ip, client.port, client.connectTime, client.status};
+            tableModel.addRow(row);
+        }
+    }
 
     public DefaultTableModel getTableModel() {
         return tableModel;

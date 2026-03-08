@@ -104,7 +104,7 @@ public class FtpServer {
         threadPool = new java.util.concurrent.ThreadPoolExecutor(
             coreThreads,
             maxThreads,
-            60L, TimeUnit.SECONDS,
+            30L, TimeUnit.SECONDS,
             new java.util.concurrent.LinkedBlockingQueue<>(queueCapacity),
             new java.util.concurrent.ThreadFactory() {
                 private int count = 0;
@@ -116,10 +116,11 @@ public class FtpServer {
                     return t;
                 }
             },
-            new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy()
+            new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy()
         );
         
-        ((java.util.concurrent.ThreadPoolExecutor) threadPool).prestartCoreThread();
+        // 预启动核心线程，提高响应速度
+        ((java.util.concurrent.ThreadPoolExecutor) threadPool).prestartAllCoreThreads();
         // 创建服务器套接字并开始监听
         serverSocket = new ServerSocket(config.getPort());
         serverSocket.setSoTimeout(5000);

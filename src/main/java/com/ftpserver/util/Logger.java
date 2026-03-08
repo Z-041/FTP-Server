@@ -10,7 +10,11 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Logger {
     private static Logger instance;
@@ -21,6 +25,15 @@ public class Logger {
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
     private static final long MAX_LOG_FILE_SIZE = 10 * 1024 * 1024;
     private static final int MAX_LOG_FILES = 5;
+    private static final int LOG_QUEUE_CAPACITY = 10000;
+    private static final int BATCH_SIZE = 100;
+    private static final long FLUSH_INTERVAL_MS = 1000;
+
+    private final BlockingQueue<LogEntry> logQueue;
+    private final AtomicBoolean running;
+    private final AtomicBoolean shutdownRequested;
+    private Thread logWriterThread;
+    private volatile boolean initialized = false;
 
     public interface LogListener {
         void onLogEntry(LogEntry entry);
@@ -63,13 +76,62 @@ public class Logger {
         this.listeners = new CopyOnWriteArrayList<>();
         this.logDirectory = "logs";
         this.enableFileLogging = true;
+        this.logQueue = new LinkedBlockingQueue<>(LOG_QUEUE_CAPACITY);
+        this.running = new AtomicBoolean(true);
+        this.shutdownRequested = new AtomicBoolean(false);
+        initializeAsyncWriter();
     }
 
-    public static synchronized Logger getInstance() {
-        if (instance == null) {
-            instance = new Logger();
-        }
-        return instance;
+    private static class LoggerHolder {
+        private static final Logger INSTANCE = new Logger();
+    }
+
+    public static Logger getInstance() {
+        return LoggerHolder.INSTANCE;
+    }
+
+    /**
+     * 初始化异步日志写入器
+     */
+    private void initializeAsyncWriter() {
+        logWriterThread = new Thread(() -> {
+            List<LogEntry> batch = new ArrayList<>(BATCH_SIZE);
+            long lastFlushTime = System.currentTimeMillis();
+            
+            while (running.get() || !logQueue.isEmpty()) {
+                try {
+                    LogEntry entry = logQueue.poll(100, TimeUnit.MILLISECONDS);
+                    if (entry != null) {
+                        batch.add(entry);
+                    }
+                    
+                    long currentTime = System.currentTimeMillis();
+                    boolean shouldFlush = batch.size() >= BATCH_SIZE || 
+                                       (currentTime - lastFlushTime >= FLUSH_INTERVAL_MS) ||
+                                       (shutdownRequested.get() && !batch.isEmpty());
+                    
+                    if (shouldFlush && !batch.isEmpty()) {
+                        writeBatchToFile(batch);
+                        batch.clear();
+                        lastFlushTime = currentTime;
+                    }
+                } catch (InterruptedException e) {
+                    if (running.get()) {
+                        System.err.println("Log writer thread interrupted: " + e.getMessage());
+                    }
+                    break;
+                }
+            }
+            
+            if (!batch.isEmpty()) {
+                writeBatchToFile(batch);
+            }
+            
+            initialized = true;
+        }, "AsyncLogWriter");
+        
+        logWriterThread.setDaemon(true);
+        logWriterThread.start();
     }
 
     public void setLogDirectory(String logDirectory) {
@@ -99,8 +161,48 @@ public class Logger {
             logEntries.remove(0);
         }
         listeners.forEach(listener -> listener.onLogEntry(entry));
+        
         if (enableFileLogging) {
-            writeToFile(entry);
+            if (!logQueue.offer(entry)) {
+                System.err.println("Log queue full, dropping log entry: " + message);
+            }
+        }
+    }
+    
+    /**
+     * 批量写入日志到文件
+     * @param entries 日志条目列表
+     */
+    private void writeBatchToFile(List<LogEntry> entries) {
+        if (entries.isEmpty()) {
+            return;
+        }
+        
+        try {
+            Path logDir = Paths.get(logDirectory);
+            Files.createDirectories(logDir);
+            
+            String date = entries.get(0).timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            Path logFile = logDir.resolve("ftp-server-" + date + ".log");
+            
+            if (Files.exists(logFile) && Files.size(logFile) > MAX_LOG_FILE_SIZE) {
+                rotateLogFile(logFile);
+            }
+            
+            StringBuilder sb = new StringBuilder(entries.size() * 100);
+            for (LogEntry entry : entries) {
+                String maskedIp = maskIpAddress(entry.ip);
+                sb.append(String.format("[%s] [%s] [%s] %s%n",
+                        entry.timestamp.format(TIMESTAMP_FORMATTER),
+                        entry.level,
+                        maskedIp,
+                        entry.message));
+            }
+            
+            Files.write(logFile, sb.toString().getBytes("UTF-8"),
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            System.err.println("Failed to write log batch to file: " + e.getMessage());
         }
     }
     
@@ -124,31 +226,6 @@ public class Logger {
         }
         
         return ip.substring(0, Math.min(ip.length(), 8)) + "***";
-    }
-
-    private void writeToFile(LogEntry entry) {
-        try {
-            Path logDir = Paths.get(logDirectory);
-            Files.createDirectories(logDir);
-            String date = entry.timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-            Path logFile = logDir.resolve("ftp-server-" + date + ".log");
-            
-            if (Files.exists(logFile) && Files.size(logFile) > MAX_LOG_FILE_SIZE) {
-                rotateLogFile(logFile);
-            }
-            
-            String maskedIp = maskIpAddress(entry.ip);
-            String formattedEntry = String.format("[%s] [%s] [%s] %s%n",
-                    entry.timestamp.format(TIMESTAMP_FORMATTER),
-                    entry.level,
-                    maskedIp,
-                    entry.message);
-            
-            Files.write(logFile, formattedEntry.getBytes("UTF-8"),
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (IOException e) {
-            System.err.println("Failed to write log to file: " + e.getMessage());
-        }
     }
 
     private void rotateLogFile(Path logFile) throws IOException {
@@ -219,5 +296,43 @@ public class Logger {
 
     public void clearLogs() {
         logEntries.clear();
+    }
+    
+    /**
+     * 优雅关闭日志系统
+     */
+    public void shutdown() {
+        if (!initialized) {
+            return;
+        }
+        
+        shutdownRequested.set(true);
+        running.set(false);
+        
+        if (logWriterThread != null && logWriterThread.isAlive()) {
+            try {
+                logWriterThread.interrupt();
+                logWriterThread.join(5000);
+            } catch (InterruptedException e) {
+                System.err.println("Interrupted while waiting for log writer thread to shutdown: " + e.getMessage());
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+    
+    /**
+     * 获取日志队列大小
+     * @return 队列中待处理的日志条目数
+     */
+    public int getQueueSize() {
+        return logQueue.size();
+    }
+    
+    /**
+     * 检查日志系统是否已初始化
+     * @return 是否已初始化
+     */
+    public boolean isInitialized() {
+        return initialized;
     }
 }

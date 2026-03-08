@@ -432,69 +432,96 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
         java.util.List<FtpServer.ClientSession> currentSessions = ftpServer != null ? 
             new java.util.ArrayList<>(ftpServer.getClientSessions()) : new java.util.ArrayList<>();
         
-        boolean sessionsChanged = currentSessions.size() != lastSessions.size();
-        if (!sessionsChanged) {
-            for (int i = 0; i < currentSessions.size(); i++) {
-                FtpServer.ClientSession current = currentSessions.get(i);
-                FtpServer.ClientSession last = lastSessions.get(i);
-                if (!current.getClientAddress().equals(last.getClientAddress()) ||
-                    current.getClientPort() != last.getClientPort() ||
-                    current.active != last.active) {
-                    sessionsChanged = true;
-                    break;
-                }
-            }
-        }
+        // 使用更高效的比较方法
+        boolean sessionsChanged = hasSessionsChanged(currentSessions, lastSessions);
         
         if (sessionsChanged) {
-            lastSessions = currentSessions;
+            lastSessions = new java.util.ArrayList<>(currentSessions);
+            final java.util.List<ClientRow> rows = new java.util.ArrayList<>(currentSessions.size());
+            for (FtpServer.ClientSession session : currentSessions) {
+                rows.add(new ClientRow(
+                        session.getClientAddress(),
+                        String.valueOf(session.getClientPort()),
+                        session.connectTime.format(dateTimeFormatter),
+                        session.active ? "Active" : "Idle"
+                ));
+            }
+            
             SwingUtilities.invokeLater(() -> {
-                clientsContent.clearData();
-                for (FtpServer.ClientSession session : currentSessions) {
-                    clientsContent.addClient(new ClientRow(
-                            session.getClientAddress(),
-                            String.valueOf(session.getClientPort()),
-                            session.connectTime.format(dateTimeFormatter),
-                            session.active ? "Active" : "Idle"
-                    ));
-                }
+                clientsContent.updateData(rows);
             });
         }
+    }
+    
+    private boolean hasSessionsChanged(java.util.List<FtpServer.ClientSession> current, 
+                                       java.util.List<FtpServer.ClientSession> last) {
+        if (current.size() != last.size()) {
+            return true;
+        }
+        
+        // 使用Map进行O(n)比较
+        java.util.Map<String, FtpServer.ClientSession> lastMap = new java.util.HashMap<>();
+        for (FtpServer.ClientSession s : last) {
+            lastMap.put(s.getClientAddress() + ":" + s.getClientPort(), s);
+        }
+        
+        for (FtpServer.ClientSession currentSession : current) {
+            String key = currentSession.getClientAddress() + ":" + currentSession.getClientPort();
+            FtpServer.ClientSession lastSession = lastMap.get(key);
+            if (lastSession == null || 
+                currentSession.active != lastSession.active ||
+                currentSession.getClientPort() != lastSession.getClientPort()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void refreshUsersTable() {
         java.util.List<User> currentUsers = new java.util.ArrayList<>(userManager.getAllUsers());
         
-        // 检查用户数据是否变化
-        boolean usersChanged = currentUsers.size() != lastUsers.size();
-        if (!usersChanged) {
-            for (int i = 0; i < currentUsers.size(); i++) {
-                User current = currentUsers.get(i);
-                User last = lastUsers.get(i);
-                if (!current.getUsername().equals(last.getUsername()) ||
-                    !java.util.Objects.equals(current.getHomeDirectory(), last.getHomeDirectory()) ||
-                    current.isEnabled() != last.isEnabled() ||
-                    !current.getPermissions().equals(last.getPermissions())) {
-                    usersChanged = true;
-                    break;
-                }
-            }
-        }
+        // 使用更高效的比较方法
+        boolean usersChanged = hasUsersChanged(currentUsers, lastUsers);
         
         if (usersChanged) {
-            lastUsers = currentUsers;
+            lastUsers = new java.util.ArrayList<>(currentUsers);
+            final java.util.List<UserRow> rows = new java.util.ArrayList<>(currentUsers.size());
+            for (User user : currentUsers) {
+                rows.add(new UserRow(
+                        user.getUsername(),
+                        user.getHomeDirectory() != null ? user.getHomeDirectory() : "Default",
+                        user.isEnabled() ? "Yes" : "No",
+                        user.getPermissions().toString()
+                ));
+            }
+            
             SwingUtilities.invokeLater(() -> {
-                usersContent.clearData();
-                for (User user : currentUsers) {
-                    usersContent.addUser(new UserRow(
-                            user.getUsername(),
-                            user.getHomeDirectory() != null ? user.getHomeDirectory() : "Default",
-                            user.isEnabled() ? "Yes" : "No",
-                            user.getPermissions().toString()
-                    ));
-                }
+                usersContent.updateData(rows);
             });
         }
+    }
+    
+    private boolean hasUsersChanged(java.util.List<User> current, java.util.List<User> last) {
+        if (current.size() != last.size()) {
+            return true;
+        }
+        
+        // 使用Map进行O(n)比较
+        java.util.Map<String, User> lastMap = new java.util.HashMap<>();
+        for (User u : last) {
+            lastMap.put(u.getUsername(), u);
+        }
+        
+        for (User currentUser : current) {
+            User lastUser = lastMap.get(currentUser.getUsername());
+            if (lastUser == null ||
+                !java.util.Objects.equals(currentUser.getHomeDirectory(), lastUser.getHomeDirectory()) ||
+                currentUser.isEnabled() != lastUser.isEnabled() ||
+                !currentUser.getPermissions().equals(lastUser.getPermissions())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void showAddUserDialog() {
@@ -667,6 +694,7 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
         }
         if (logger != null) {
             logger.removeListener(this);
+            logger.shutdown();
         }
     }
 

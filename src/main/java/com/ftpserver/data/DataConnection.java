@@ -113,6 +113,7 @@ public abstract class DataConnection implements AutoCloseable {
     }
 
     private static final int BUFFER_SIZE = 65536;
+    private static final int LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10MB
     
     /**
      * 发送文件
@@ -131,6 +132,7 @@ public abstract class DataConnection implements AutoCloseable {
         String ip = socket != null && socket.getInetAddress() != null ? socket.getInetAddress().getHostAddress() : null;
         long fileLength = file.length();
         long totalBytesSent = 0;
+        long startTime = System.currentTimeMillis();
         
         try {
             if (restartOffset > 0 && restartOffset < fileLength) {
@@ -141,54 +143,128 @@ public abstract class DataConnection implements AutoCloseable {
             logger.info("Starting file transfer: " + file.getName() + " (" + fileLength + " bytes)", "DataConnection", ip);
 
             if (asciiMode) {
-                try (FileInputStream fis = new FileInputStream(file);
-                     OutputStream os = getOutputStream()) {
+                // ASCII模式：使用BufferedInputStream提高性能
+                try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(file), BUFFER_SIZE);
+                     BufferedOutputStream bos = new BufferedOutputStream(getOutputStream(), BUFFER_SIZE)) {
                     if (restartOffset > 0 && restartOffset < fileLength) {
-                        fis.skip(restartOffset);
+                        bis.skip(restartOffset);
                     }
                     
                     byte[] buffer = new byte[BUFFER_SIZE];
                     int bytesRead;
+                    long lastLogTime = startTime;
                     
-                    while ((bytesRead = fis.read(buffer)) != -1) {
-                        os.write(buffer, 0, bytesRead);
+                    while ((bytesRead = bis.read(buffer)) != -1) {
+                        // 处理ASCII模式下的换行符转换
+                        byte[] processed = processAsciiBuffer(buffer, bytesRead);
+                        bos.write(processed);
                         totalBytesSent += bytesRead;
+                        
+                        // 大文件每5秒记录一次进度
+                        long currentTime = System.currentTimeMillis();
+                        if (fileLength > LARGE_FILE_THRESHOLD && currentTime - lastLogTime > 5000) {
+                            logger.info("File transfer progress: " + file.getName() + " " + 
+                                       (totalBytesSent * 100 / fileLength) + "%", "DataConnection", ip);
+                            lastLogTime = currentTime;
+                        }
                     }
-                    os.flush();
+                    bos.flush();
                 }
             } else {
+                // 二进制模式：使用FileChannel + BufferedOutputStream，避免不必要的数组拷贝
                 try (FileChannel fileChannel = FileChannel.open(file.toPath(), java.nio.file.StandardOpenOption.READ);
-                     OutputStream os = getOutputStream()) {
+                     BufferedOutputStream bos = new BufferedOutputStream(getOutputStream(), BUFFER_SIZE)) {
                     
                     if (restartOffset > 0 && restartOffset < fileLength) {
                         fileChannel.position(restartOffset);
                     }
                     
                     ByteBuffer buffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
+                    long lastLogTime = startTime;
                     
                     while (fileChannel.read(buffer) != -1) {
                         buffer.flip();
-                        byte[] byteArray = new byte[buffer.remaining()];
-                        buffer.get(byteArray);
-                        os.write(byteArray);
-                        totalBytesSent += buffer.position();
+                        // 直接使用ByteBuffer的array()或get()方法
+                        if (buffer.hasArray()) {
+                            bos.write(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+                        } else {
+                            // 对于直接缓冲区，使用get方法
+                            byte[] byteArray = new byte[buffer.remaining()];
+                            buffer.get(byteArray);
+                            bos.write(byteArray);
+                        }
+                        totalBytesSent += buffer.limit();
                         buffer.clear();
+                        
+                        // 大文件每5秒记录一次进度
+                        long currentTime = System.currentTimeMillis();
+                        if (fileLength > LARGE_FILE_THRESHOLD && currentTime - lastLogTime > 5000) {
+                            logger.info("File transfer progress: " + file.getName() + " " + 
+                                       (totalBytesSent * 100 / fileLength) + "%", "DataConnection", ip);
+                            lastLogTime = currentTime;
+                        }
                     }
-                    os.flush();
+                    bos.flush();
                 }
             }
 
+            long duration = System.currentTimeMillis() - startTime;
+            double speed = duration > 0 ? (totalBytesSent / 1024.0 / 1024.0) / (duration / 1000.0) : 0;
+            
             if (restartOffset == 0 && totalBytesSent != fileLength) {
                 logger.warn("File transfer incomplete: expected " + fileLength + " bytes, sent " + totalBytesSent, "DataConnection", ip);
                 throw new DataConnectionException("File transfer incomplete: expected " + fileLength + " bytes, sent " + totalBytesSent,
                                                 DataConnectionException.ErrorType.TRANSFER_ERROR);
             }
 
-            logger.info("File transfer completed: " + file.getName() + " (" + totalBytesSent + " bytes)", "DataConnection", ip);
+            logger.info(String.format("File transfer completed: %s (%d bytes, %.2f MB/s)", 
+                                     file.getName(), totalBytesSent, speed), "DataConnection", ip);
         } catch (IOException e) {
             logger.error("File transfer failed: " + e.getMessage(), "DataConnection", ip);
             throw new DataConnectionException("File transfer failed", DataConnectionException.ErrorType.TRANSFER_ERROR, e);
         }
+    }
+    
+    /**
+     * 处理ASCII模式下的缓冲区，转换换行符
+     */
+    private byte[] processAsciiBuffer(byte[] buffer, int length) {
+        // 检查是否需要转换
+        boolean needsConversion = false;
+        for (int i = 0; i < length; i++) {
+            if (buffer[i] == '\n' || buffer[i] == '\r') {
+                needsConversion = true;
+                break;
+            }
+        }
+        
+        if (!needsConversion) {
+            return buffer;
+        }
+        
+        // 转换换行符为CRLF
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream(length + 100);
+        for (int i = 0; i < length; i++) {
+            if (buffer[i] == '\n') {
+                // 检查前一个字符是否是CR
+                if (i == 0 || buffer[i - 1] != '\r') {
+                    baos.write('\r');
+                }
+                baos.write('\n');
+            } else if (buffer[i] == '\r') {
+                baos.write('\r');
+                // 检查下一个字符是否是LF
+                if (i + 1 < length && buffer[i + 1] == '\n') {
+                    baos.write('\n');
+                    i++; // 跳过下一个LF
+                } else {
+                    baos.write('\n');
+                }
+            } else {
+                baos.write(buffer[i]);
+            }
+        }
+        return baos.toByteArray();
     }
 
     /**
