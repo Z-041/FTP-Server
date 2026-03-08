@@ -26,14 +26,20 @@ public class ServerConfig {
         if (Files.exists(path)) {
             try (BufferedReader reader = Files.newBufferedReader(path)) {
                 String line;
+                int lineNumber = 0;
                 while ((line = reader.readLine()) != null) {
+                    lineNumber++;
                     line = line.trim();
                     if (line.isEmpty() || line.startsWith("#")) continue;
                     String[] parts = line.split("=", 2);
                     if (parts.length == 2) {
                         String key = parts[0].trim();
                         String value = replaceSystemProperties(parts[1].trim());
-                        setProperty(key, value);
+                        try {
+                            setProperty(key, value);
+                        } catch (Exception e) {
+                            System.err.println("Warning: Invalid config at line " + lineNumber + ": " + e.getMessage());
+                        }
                     }
                 }
             }

@@ -18,7 +18,9 @@ import java.util.regex.Pattern;
 public class UserManager {
     private static final int BCRYPT_ROUNDS = 12;
     private static final int MIN_PASSWORD_LENGTH = 8;
+    private static final int MAX_PASSWORD_LENGTH = 128;
     private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).*$");
+    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]{3,32}$");
     
     private List<User> users;
     private String usersFilePath;
@@ -83,10 +85,14 @@ public class UserManager {
             }
         } catch (IOException e) {
             logger.error("Failed to save users: " + e.getMessage(), "UserManager", "-");
+            throw new RuntimeException("Failed to save users: " + e.getMessage(), e);
         }
     }
 
     public Optional<User> authenticate(String username, String password) {
+        if (username == null || password == null) {
+            return Optional.empty();
+        }
         return users.stream()
                 .filter(u -> u.getUsername().equals(username) && 
                            verifyPassword(password, u.getPassword()) && 
@@ -99,10 +105,26 @@ public class UserManager {
     }
 
     public boolean validatePassword(String password) {
-        if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
+        if (password == null || password.isEmpty()) {
             return false;
         }
-        return PASSWORD_PATTERN.matcher(password).matches();
+        if (password.length() < MIN_PASSWORD_LENGTH || password.length() > MAX_PASSWORD_LENGTH) {
+            return false;
+        }
+        if (!PASSWORD_PATTERN.matcher(password).matches()) {
+            return false;
+        }
+        if (password.contains(" ") || password.contains("\t") || password.contains("\n")) {
+            return false;
+        }
+        return true;
+    }
+
+    public boolean validateUsername(String username) {
+        if (username == null || username.isEmpty()) {
+            return false;
+        }
+        return USERNAME_PATTERN.matcher(username).matches();
     }
 
     public void addUser(User user) {

@@ -189,6 +189,32 @@ public class FtpServer {
         }
     }
 
+    /**
+     * 检查并清理超时的客户端连接
+     */
+    public void checkIdleClients() {
+        long currentTime = System.currentTimeMillis();
+        long timeoutMillis = config.getConnectionTimeout() * 1000L;
+        
+        for (ClientSession session : clientSessions) {
+            if (!session.active) {
+                continue;
+            }
+            
+            long idleTime = currentTime - session.connectTime.toEpochSecond(java.time.ZoneOffset.UTC) * 1000;
+            if (idleTime > timeoutMillis) {
+                logger.warn("Client timeout: " + session.getClientAddress(), "FtpServer", session.getClientAddress());
+                try {
+                    if (!session.socket.isClosed()) {
+                        session.socket.close();
+                    }
+                } catch (IOException e) {
+                    logger.error("Error closing idle client socket: " + e.getMessage(), "FtpServer", session.getClientAddress());
+                }
+            }
+        }
+    }
+
     public synchronized void stop() {
         if (!running) {
             return;

@@ -39,12 +39,10 @@ public class CommandHandler {
     public void handle() {
         String clientIp = session.getRemoteAddress() != null ? session.getRemoteAddress().getHostAddress() : null;
         try {
-            // 发送欢迎消息
             session.sendResponse("220 Welcome to Java FTP Server");
             logger.info("Welcome message sent to client: " + clientIp, "CommandHandler", clientIp);
 
             String line;
-            // 循环读取客户端命令
             while ((line = session.readLine()) != null) {
                 line = line.trim();
                 if (line.isEmpty())
@@ -53,7 +51,6 @@ public class CommandHandler {
                 session.logDebug("Received: " + line);
                 logger.debug("Command received from " + clientIp + ": " + line, "CommandHandler", clientIp);
 
-                // 解析命令和参数
                 int spaceIndex = line.indexOf(' ');
                 String command = (spaceIndex > 0 ? line.substring(0, spaceIndex) : line).toUpperCase();
                 String argument = spaceIndex > 0 ? line.substring(spaceIndex + 1).trim() : "";
@@ -64,15 +61,18 @@ public class CommandHandler {
                     continue;
                 }
 
-                // 执行命令并跟踪状态
                 CommandStatus status = executeCommandWithStatus(command, argument);
                 logger.debug("Command " + command + " executed with status: " + status, "CommandHandler", clientIp);
             }
         } catch (IOException e) {
-            logger.error("Connection error for client: " + clientIp + ": " + e.getMessage(), "CommandHandler", clientIp);
-            session.logError("Connection error", e);
+            if (session.isConnected()) {
+                logger.error("Connection error for client: " + clientIp + ": " + e.getMessage(), "CommandHandler", clientIp);
+                session.logError("Connection error", e);
+            }
+        } catch (Exception e) {
+            logger.error("Unexpected error for client: " + clientIp + ": " + e.getMessage(), "CommandHandler", clientIp);
+            session.logError("Unexpected error", e);
         } finally {
-            // 关闭会话
             session.close();
             logger.info("Session closed for client: " + clientIp, "CommandHandler", clientIp);
         }

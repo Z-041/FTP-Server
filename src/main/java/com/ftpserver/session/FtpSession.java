@@ -58,12 +58,23 @@ public class FtpSession implements AutoCloseable {
     }
 
     public void sendResponse(String response) {
-        writer.println(response);
-        logger.debug("Sent: " + response, "FtpSession", clientIp);
+        try {
+            writer.println(response);
+            logger.debug("Sent: " + response, "FtpSession", clientIp);
+        } catch (Exception e) {
+            logger.error("Failed to send response: " + e.getMessage(), "FtpSession", clientIp);
+        }
     }
 
     public String readLine() throws IOException {
-        return reader.readLine();
+        try {
+            String line = reader.readLine();
+            updateLastActivityTime();
+            return line;
+        } catch (IOException e) {
+            logger.error("Failed to read line: " + e.getMessage(), "FtpSession", clientIp);
+            throw e;
+        }
     }
 
     public void logDebug(String message) {

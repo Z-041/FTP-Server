@@ -74,6 +74,11 @@ public class UsersContent extends JPanel {
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
+            
+            @Override
+            public Class<?> getColumnClass(int column) {
+                return String.class;
+            }
         };
 
         JTable table = new JTable(tableModel);
@@ -84,9 +89,10 @@ public class UsersContent extends JPanel {
         table.getTableHeader().setBackground(new Color(248, 250, 252));
         table.getTableHeader().setForeground(new Color(71, 85, 105));
         table.getTableHeader().setPreferredSize(new Dimension(0, 38));
-        table.setAutoCreateRowSorter(false);
+        table.setAutoCreateRowSorter(true);
         table.setDoubleBuffered(true);
         table.setFillsViewportHeight(true);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
         return table;
     }

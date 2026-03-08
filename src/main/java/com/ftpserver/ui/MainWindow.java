@@ -98,38 +98,46 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
     }
 
     private void flushLogBatch() {
+        String batch;
         synchronized (logBufferLock) {
             if (logBatchBuffer.length() > 0) {
-                String batch = logBatchBuffer.toString();
+                batch = logBatchBuffer.toString();
                 logBatchBuffer.setLength(0);
-                
-                SwingUtilities.invokeLater(() -> {
-                    // 批量更新日志页面
-                    logsContent.appendLog(batch);
-
-                    // 批量更新概览页面的最近活动区域
-                    JTextArea overviewLogArea = overviewContent.getLogTextArea();
-                    overviewLogArea.append(batch);
-                    overviewLogArea.setCaretPosition(overviewLogArea.getDocument().getLength());
-                    
-                    // 计算新增行数并限制显示
-                    int newLines = countNewLines(batch);
-                    overviewLogLineCount += newLines;
-                    
-                    if (overviewLogLineCount > MAX_OVERVIEW_LOG_LINES) {
-                        try {
-                            int linesToRemove = overviewLogLineCount - MAX_OVERVIEW_LOG_LINES;
-                            int end = overviewLogArea.getLineStartOffset(0);
-                            int start = overviewLogArea.getLineStartOffset(linesToRemove);
-                            overviewLogArea.replaceRange("", end, start);
-                            overviewLogLineCount = MAX_OVERVIEW_LOG_LINES;
-                        } catch (Exception ex) {
-                            // 忽略文档操作异常
-                        }
-                    }
-                });
+            } else {
+                return;
             }
         }
+        
+        final String finalBatch = batch;
+        SwingUtilities.invokeLater(() -> {
+            try {
+                // 批量更新日志页面
+                logsContent.appendLog(finalBatch);
+
+                // 批量更新概览页面的最近活动区域
+                JTextArea overviewLogArea = overviewContent.getLogTextArea();
+                overviewLogArea.append(finalBatch);
+                overviewLogArea.setCaretPosition(overviewLogArea.getDocument().getLength());
+                
+                // 计算新增行数并限制显示
+                int newLines = countNewLines(finalBatch);
+                overviewLogLineCount += newLines;
+                
+                if (overviewLogLineCount > MAX_OVERVIEW_LOG_LINES) {
+                    try {
+                        int linesToRemove = overviewLogLineCount - MAX_OVERVIEW_LOG_LINES;
+                        int end = overviewLogArea.getLineStartOffset(0);
+                        int start = overviewLogArea.getLineStartOffset(linesToRemove);
+                        overviewLogArea.replaceRange("", end, start);
+                        overviewLogLineCount = MAX_OVERVIEW_LOG_LINES;
+                    } catch (Exception ex) {
+                        logger.error("Failed to trim log buffer: " + ex.getMessage(), "MainWindow", "-");
+                    }
+                }
+            } catch (Exception ex) {
+                logger.error("Error updating log display: " + ex.getMessage(), "MainWindow", "-");
+            }
+        });
     }
 
     private int countNewLines(String text) {
@@ -396,6 +404,10 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
     }
 
     private void updateStats() {
+        if (ftpServer != null && ftpServer.isRunning()) {
+            ftpServer.checkIdleClients();
+        }
+        
         int connCount = ftpServer != null ? ftpServer.getConnectionCount() : 0;
         int userCount = userManager.getAllUsers().size();
         
@@ -649,6 +661,12 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
     private void cleanup() {
         if (updateTimer != null) {
             updateTimer.stop();
+        }
+        if (logBatchTimer != null) {
+            logBatchTimer.stop();
+        }
+        if (logger != null) {
+            logger.removeListener(this);
         }
     }
 

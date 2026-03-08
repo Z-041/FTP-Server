@@ -22,12 +22,16 @@ public class ClientsContent extends JPanel {
         JLabel title = new JLabel("已连接客户端");
         title.setForeground(new Color(15, 23, 42));
 
-        // 创建表格
         String[] columnNames = {"IP地址", "端口", "连接时间", "状态"};
         tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
+            }
+            
+            @Override
+            public Class<?> getColumnClass(int column) {
+                return String.class;
             }
         };
         table = new JTable(tableModel);
@@ -38,9 +42,10 @@ public class ClientsContent extends JPanel {
         table.getTableHeader().setBackground(new Color(248, 250, 252));
         table.getTableHeader().setForeground(new Color(71, 85, 105));
         table.getTableHeader().setPreferredSize(new Dimension(0, 38));
-        table.setAutoCreateRowSorter(false);
+        table.setAutoCreateRowSorter(true);
         table.setDoubleBuffered(true);
         table.setFillsViewportHeight(true);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
         JScrollPane scrollPane = new JScrollPane(table);
         scrollPane.setBorder(BorderFactory.createLineBorder(new Color(226, 232, 240)));
