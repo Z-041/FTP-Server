@@ -5,17 +5,25 @@ import com.ftpserver.ui.model.UserRow;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.awt.event.KeyEvent;
+import java.util.ArrayList;
+import java.util.List;
 
 public class UsersContent extends JPanel {
 
     private DefaultTableModel tableModel;
     private JTable table;
+    private TableRowSorter<DefaultTableModel> sorter;
     private JButton addBtn;
     private JButton editBtn;
     private JButton deleteBtn;
+    private JTextField searchField;
+    private List<UserRow> allUsers;
 
     public UsersContent() {
+        allUsers = new ArrayList<>();
         initialize();
     }
 
@@ -37,6 +45,16 @@ public class UsersContent extends JPanel {
         JLabel title = new JLabel("用户管理");
         title.setForeground(new Color(15, 23, 42));
 
+        searchField = new JTextField();
+        searchField.setPreferredSize(new Dimension(200, 28));
+        searchField.setToolTipText("搜索用户名或权限");
+        searchField.addKeyListener(new java.awt.event.KeyAdapter() {
+            @Override
+            public void keyReleased(KeyEvent e) {
+                filterUsers();
+            }
+        });
+
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         buttonPanel.setBackground(new Color(248, 250, 252));
 
@@ -49,6 +67,7 @@ public class UsersContent extends JPanel {
         buttonPanel.add(deleteBtn);
 
         headerBar.add(title, BorderLayout.WEST);
+        headerBar.add(searchField, BorderLayout.CENTER);
         headerBar.add(buttonPanel, BorderLayout.EAST);
 
         return headerBar;
@@ -89,34 +108,58 @@ public class UsersContent extends JPanel {
         table.getTableHeader().setBackground(new Color(248, 250, 252));
         table.getTableHeader().setForeground(new Color(71, 85, 105));
         table.getTableHeader().setPreferredSize(new Dimension(0, 38));
-        table.setAutoCreateRowSorter(true);
         table.setDoubleBuffered(true);
         table.setFillsViewportHeight(true);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
+        sorter = new TableRowSorter<>(tableModel);
+        table.setRowSorter(sorter);
+
         return table;
     }
 
+    /**
+     * 过滤用户列表
+     */
+    private void filterUsers() {
+        String searchText = searchField.getText().trim().toLowerCase();
+        tableModel.setRowCount(0);
+        
+        if (searchText.isEmpty()) {
+            for (UserRow user : allUsers) {
+                Object[] row = {user.username, user.homeDir, user.enabled, user.permissions};
+                tableModel.addRow(row);
+            }
+        } else {
+            for (UserRow user : allUsers) {
+                if (user.username.toLowerCase().contains(searchText) || 
+                    user.homeDir.toLowerCase().contains(searchText) ||
+                    user.enabled.toLowerCase().contains(searchText) ||
+                    user.permissions.toLowerCase().contains(searchText)) {
+                    Object[] row = {user.username, user.homeDir, user.enabled, user.permissions};
+                    tableModel.addRow(row);
+                }
+            }
+        }
+    }
+
     public void clearData() {
+        allUsers.clear();
         tableModel.setRowCount(0);
     }
 
     public void addUser(UserRow user) {
-        Object[] row = {user.username, user.homeDir, user.enabled, user.permissions};
-        tableModel.addRow(row);
+        allUsers.add(user);
+        filterUsers();
     }
     
     /**
      * 批量更新数据，提高性能
      * @param users 用户列表
      */
-    public void updateData(java.util.List<UserRow> users) {
-        // 批量更新，先清空再添加所有行
-        tableModel.setRowCount(0);
-        for (UserRow user : users) {
-            Object[] row = {user.username, user.homeDir, user.enabled, user.permissions};
-            tableModel.addRow(row);
-        }
+    public void updateData(List<UserRow> users) {
+        allUsers = new ArrayList<>(users);
+        filterUsers();
     }
 
     public UserRow getSelectedUser() {
@@ -150,5 +193,13 @@ public class UsersContent extends JPanel {
 
     public JButton getDeleteBtn() {
         return deleteBtn;
+    }
+    
+    /**
+     * 获取搜索字段
+     * @return 搜索字段
+     */
+    public JTextField getSearchField() {
+        return searchField;
     }
 }

@@ -10,6 +10,13 @@ public class ConfigContent extends JPanel {
     private JTextField rootDirField;
     private JButton browseBtn;
     private JTextField maxConnField;
+    private JTextField timeoutField;
+    private JTextField passiveStartField;
+    private JTextField passiveEndField;
+    private JCheckBox passiveModeCheck;
+    private JCheckBox activeModeCheck;
+    private JTextField logDirField;
+    private JTextField passiveAddrField;
     private JButton saveBtn;
 
     public ConfigContent() {
@@ -119,6 +126,133 @@ public class ConfigContent extends JPanel {
         ));
         form.add(maxConnField, gbc);
 
+        // Connection Timeout
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
+        JLabel timeoutLabel = new JLabel("连接超时(秒):");
+        timeoutLabel.setForeground(new Color(71, 85, 105));
+        form.add(timeoutLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        timeoutField = new JTextField(20);
+        timeoutField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(203, 213, 225)),
+            new EmptyBorder(8, 10, 8, 10)
+        ));
+        form.add(timeoutField, gbc);
+
+        // Passive Port Range Start
+        gbc.gridx = 0;
+        gbc.gridy = 4;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
+        JLabel passiveStartLabel = new JLabel("被动端口起始:");
+        passiveStartLabel.setForeground(new Color(71, 85, 105));
+        form.add(passiveStartLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        passiveStartField = new JTextField(20);
+        passiveStartField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(203, 213, 225)),
+            new EmptyBorder(8, 10, 8, 10)
+        ));
+        form.add(passiveStartField, gbc);
+
+        // Passive Port Range End
+        gbc.gridx = 0;
+        gbc.gridy = 5;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
+        JLabel passiveEndLabel = new JLabel("被动端口结束:");
+        passiveEndLabel.setForeground(new Color(71, 85, 105));
+        form.add(passiveEndLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        passiveEndField = new JTextField(20);
+        passiveEndField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(203, 213, 225)),
+            new EmptyBorder(8, 10, 8, 10)
+        ));
+        form.add(passiveEndField, gbc);
+
+        // Passive Mode
+        gbc.gridx = 0;
+        gbc.gridy = 6;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
+        JLabel passiveModeLabel = new JLabel("被动模式:");
+        passiveModeLabel.setForeground(new Color(71, 85, 105));
+        form.add(passiveModeLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        passiveModeCheck = new JCheckBox("启用");
+        passiveModeCheck.setBackground(Color.WHITE);
+        form.add(passiveModeCheck, gbc);
+
+        // Active Mode
+        gbc.gridx = 0;
+        gbc.gridy = 7;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
+        JLabel activeModeLabel = new JLabel("主动模式:");
+        activeModeLabel.setForeground(new Color(71, 85, 105));
+        form.add(activeModeLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        activeModeCheck = new JCheckBox("启用");
+        activeModeCheck.setBackground(Color.WHITE);
+        form.add(activeModeCheck, gbc);
+
+        // Log Directory
+        gbc.gridx = 0;
+        gbc.gridy = 8;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
+        JLabel logDirLabel = new JLabel("日志目录:");
+        logDirLabel.setForeground(new Color(71, 85, 105));
+        form.add(logDirLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        logDirField = new JTextField(20);
+        logDirField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(203, 213, 225)),
+            new EmptyBorder(8, 10, 8, 10)
+        ));
+        form.add(logDirField, gbc);
+
+        // Passive Address
+        gbc.gridx = 0;
+        gbc.gridy = 9;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
+        JLabel passiveAddrLabel = new JLabel("被动模式地址:");
+        passiveAddrLabel.setForeground(new Color(71, 85, 105));
+        form.add(passiveAddrLabel, gbc);
+
+        gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        passiveAddrField = new JTextField(20);
+        passiveAddrField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(203, 213, 225)),
+            new EmptyBorder(8, 10, 8, 10)
+        ));
+        form.add(passiveAddrField, gbc);
+
         return form;
     }
 
@@ -154,6 +288,34 @@ public class ConfigContent extends JPanel {
 
     public JTextField getMaxConnField() {
         return maxConnField;
+    }
+
+    public JTextField getTimeoutField() {
+        return timeoutField;
+    }
+
+    public JTextField getPassiveStartField() {
+        return passiveStartField;
+    }
+
+    public JTextField getPassiveEndField() {
+        return passiveEndField;
+    }
+
+    public JCheckBox getPassiveModeCheck() {
+        return passiveModeCheck;
+    }
+
+    public JCheckBox getActiveModeCheck() {
+        return activeModeCheck;
+    }
+
+    public JTextField getLogDirField() {
+        return logDirField;
+    }
+
+    public JTextField getPassiveAddrField() {
+        return passiveAddrField;
     }
 
     public JButton getSaveBtn() {

@@ -1,5 +1,7 @@
 package com.ftpserver.ui;
 
+import com.ftpserver.config.ConfigValidator;
+import com.ftpserver.config.ConfigWatcher;
 import com.ftpserver.config.ServerConfig;
 import com.ftpserver.server.FtpServer;
 import com.ftpserver.ui.content.*;
@@ -14,10 +16,7 @@ import com.ftpserver.util.Logger;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
@@ -65,6 +64,9 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
     
     // 用户数据缓存
     private java.util.List<User> lastUsers = new java.util.ArrayList<>();
+    
+    // 配置文件监控
+    private ConfigWatcher configWatcher;
 
     public MainWindow() {
         loadConfig();
@@ -89,6 +91,44 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
         // 设置GUI日志监听器
         setupGUILogListener();
         initLogBatchTimer();
+        
+        // 初始化配置文件监控
+        initConfigWatcher();
+    }
+
+    private void initConfigWatcher() {
+        try {
+            configWatcher = new ConfigWatcher(CONFIG_PATH);
+            configWatcher.addListener(configPath -> {
+                SwingUtilities.invokeLater(() -> {
+                    try {
+                        config.load(CONFIG_PATH);
+                        logger.info("Configuration reloaded successfully", "UI", "-");
+                        updateConfigUI();
+                    } catch (IOException e) {
+                        logger.error("Failed to reload config: " + e.getMessage(), "UI", "-");
+                    }
+                });
+            });
+            configWatcher.start();
+        } catch (IOException e) {
+            logger.warn("Failed to initialize config watcher: " + e.getMessage(), "UI", "-");
+        }
+    }
+
+    private void updateConfigUI() {
+        if (configContentInitialized) {
+            configContent.getPortField().setText(String.valueOf(config.getPort()));
+            configContent.getRootDirField().setText(config.getRootDirectory());
+            configContent.getMaxConnField().setText(String.valueOf(config.getMaxConnections()));
+            configContent.getTimeoutField().setText(String.valueOf(config.getConnectionTimeout()));
+            configContent.getPassiveStartField().setText(String.valueOf(config.getDataPortRangeStart()));
+            configContent.getPassiveEndField().setText(String.valueOf(config.getDataPortRangeEnd()));
+            configContent.getPassiveModeCheck().setSelected(config.isEnablePassiveMode());
+            configContent.getActiveModeCheck().setSelected(config.isEnableActiveMode());
+            configContent.getLogDirField().setText(config.getLogDirectory());
+            configContent.getPassiveAddrField().setText(config.getPassiveAddress() != null ? config.getPassiveAddress() : "");
+        }
     }
 
     private void initLogBatchTimer() {
@@ -211,6 +251,119 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
         });
 
         setupNavigation();
+        setupKeyboardShortcuts();
+    }
+
+    private void setupKeyboardShortcuts() {
+        // Ctrl+1: 总览
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_1, java.awt.event.InputEvent.CTRL_DOWN_MASK), "navOverview");
+        getRootPane().getActionMap().put("navOverview", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sidebar.getNavOverview().doClick();
+            }
+        });
+
+        // Ctrl+2: 客户端
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_2, java.awt.event.InputEvent.CTRL_DOWN_MASK), "navClients");
+        getRootPane().getActionMap().put("navClients", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sidebar.getNavClients().doClick();
+            }
+        });
+
+        // Ctrl+3: 用户
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_3, java.awt.event.InputEvent.CTRL_DOWN_MASK), "navUsers");
+        getRootPane().getActionMap().put("navUsers", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sidebar.getNavUsers().doClick();
+            }
+        });
+
+        // Ctrl+4: 配置
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_4, java.awt.event.InputEvent.CTRL_DOWN_MASK), "navConfig");
+        getRootPane().getActionMap().put("navConfig", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sidebar.getNavConfig().doClick();
+            }
+        });
+
+        // Ctrl+5: 日志
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_5, java.awt.event.InputEvent.CTRL_DOWN_MASK), "navLogs");
+        getRootPane().getActionMap().put("navLogs", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                sidebar.getNavLogs().doClick();
+            }
+        });
+
+        // Ctrl+Space: 启动/停止服务器
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, java.awt.event.InputEvent.CTRL_DOWN_MASK), "toggleServer");
+        getRootPane().getActionMap().put("toggleServer", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                toggleServer();
+            }
+        });
+
+        // Ctrl+F: 聚焦搜索框
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_F, java.awt.event.InputEvent.CTRL_DOWN_MASK), "focusSearch");
+        getRootPane().getActionMap().put("focusSearch", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (contentPanel.isVisible()) {
+                    String activeCard = getActiveCard();
+                    if ("clients".equals(activeCard)) {
+                        clientsContent.getSearchField().requestFocus();
+                    } else if ("users".equals(activeCard)) {
+                        usersContent.getSearchField().requestFocus();
+                    }
+                }
+            }
+        });
+
+        // Ctrl+Q: 退出
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_Q, java.awt.event.InputEvent.CTRL_DOWN_MASK), "exitApp");
+        getRootPane().getActionMap().put("exitApp", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                cleanup();
+                if (ftpServer.isRunning()) {
+                    ftpServer.stop();
+                }
+                System.exit(0);
+            }
+        });
+
+        // F5: 刷新
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), "refresh");
+        getRootPane().getActionMap().put("refresh", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String activeCard = getActiveCard();
+                if ("clients".equals(activeCard)) {
+                    refreshClientsTable();
+                } else if ("users".equals(activeCard)) {
+                    refreshUsersTable();
+                }
+            }
+        });
+    }
+
+    private String getActiveCard() {
+        return "clients";
     }
 
     private JPanel createContentArea() {
@@ -369,11 +522,40 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
                 config.setPort(Integer.parseInt(configContent.getPortField().getText()));
                 config.setRootDirectory(configContent.getRootDirField().getText());
                 config.setMaxConnections(Integer.parseInt(configContent.getMaxConnField().getText()));
+                config.setConnectionTimeout(Integer.parseInt(configContent.getTimeoutField().getText()));
+                config.setDataPortRangeStart(Integer.parseInt(configContent.getPassiveStartField().getText()));
+                config.setDataPortRangeEnd(Integer.parseInt(configContent.getPassiveEndField().getText()));
+                config.setEnablePassiveMode(configContent.getPassiveModeCheck().isSelected());
+                config.setEnableActiveMode(configContent.getActiveModeCheck().isSelected());
+                config.setLogDirectory(configContent.getLogDirField().getText());
+                String passiveAddr = configContent.getPassiveAddrField().getText();
+                config.setPassiveAddress(passiveAddr.isEmpty() ? null : passiveAddr);
+                
+                ConfigValidator.ValidationResult result = ConfigValidator.validate(config);
+                
+                if (!result.isValid()) {
+                    showErrorMessage("配置验证失败:\n" + result.getErrorMessage());
+                    return;
+                }
+                
+                if (!result.getWarnings().isEmpty()) {
+                    int option = JOptionPane.showConfirmDialog(this,
+                        "配置保存成功，但有警告:\n" + result.getWarningMessage() + "\n\n是否继续?",
+                        "配置警告",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE);
+                    if (option != JOptionPane.YES_OPTION) {
+                        return;
+                    }
+                }
+                
                 config.save(CONFIG_PATH);
                 updateStats();
-                showSuccessMessage("Configuration saved successfully!");
+                showSuccessMessage("配置保存成功!");
+            } catch (NumberFormatException ex) {
+                showErrorMessage("输入格式错误: " + ex.getMessage());
             } catch (Exception ex) {
-                showErrorMessage("Failed to save: " + ex.getMessage());
+                showErrorMessage("保存失败: " + ex.getMessage());
             }
         });
     }
@@ -691,6 +873,9 @@ public class MainWindow extends JFrame implements FtpServer.ServerListener, Logg
         }
         if (logBatchTimer != null) {
             logBatchTimer.stop();
+        }
+        if (configWatcher != null) {
+            configWatcher.stop();
         }
         if (logger != null) {
             logger.removeListener(this);
